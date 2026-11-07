@@ -2,6 +2,7 @@
 // has learned so far, split into "seen", "guessing" and "proven".
 
 import { cardArt } from "./cards.js";
+import { Results } from "./results.js";
 import { describeStep } from "./words.js";
 
 const MAX_FEED = 9;
@@ -56,7 +57,8 @@ export class Backstage {
 
     const body = el("div", "backstage-body");
     body.append(feedBox, learned);
-    root.replaceChildren(intro, body);
+    this.results = new Results();
+    root.replaceChildren(intro, this.results.node, body);
     this.watched = 0;
     this.setLedger({ connected: false, claims: [] });
   }
@@ -68,6 +70,10 @@ export class Backstage {
     row.append(el("span", "feed-step", `#${this.watched}`), mark, el("span", "", describeStep(trace).text));
     this.feed.prepend(row);
     while (this.feed.children.length > MAX_FEED) this.feed.lastChild.remove();
+  }
+
+  addResult(result) {
+    this.results.add(result);
   }
 
   setStats(totals, factCount) {
