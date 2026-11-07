@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strata — pitch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0d0c0b; --line: #24211d; --line-strong: #37322b; --text: #f1ebdf; --muted: #a49b8c; --faint: #6b6458;
+  --paper: #f5efe2; --ink: #1d1a16; --heat: #e8743b; --hot: #d6392c; --cool: #6fa8d8; --ok: #8fc79a;
+  --felt: #1f3a2e; --felt-dark: #142820; --rim: #3a2a1c;
+  --serif: "Instrument Serif", Georgia, serif; --sans: "IBM Plex Sans", system-ui, sans-serif; --mono: "IBM Plex Mono", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); overflow: hidden; }
+.deck { position: relative; width: 100vw; height: 100vh; }
+.slide {
+  position: absolute; inset: 0; padding: 7vh 7vw 9vh; display: grid; align-content: center; gap: 3vh;
+  opacity: 0; transform: translateY(18px); transition: opacity .45s ease, transform .45s ease; pointer-events: none;
+}
+.slide.active { opacity: 1; transform: none; pointer-events: auto; }
+.kicker { font-family: var(--mono); font-size: 13px; letter-spacing: .22em; color: var(--muted); text-transform: uppercase; }
+.kicker b { color: var(--heat); font-weight: 500; }
+h1, h2 { font-family: var(--serif); font-weight: 400; margin: 0; letter-spacing: -.01em; }
+h1 { font-size: clamp(64px, 10vw, 168px); line-height: .92; }
+h2 { font-size: clamp(40px, 5.2vw, 84px); line-height: 1.02; max-width: 18ch; }
+h2 em, h1 em { color: var(--heat); }
+.lead { font-size: clamp(18px, 1.6vw, 26px); color: var(--muted); max-width: 52ch; line-height: 1.45; margin: 0; }
+.row { display: grid; gap: 2.4vw; grid-auto-flow: column; grid-auto-columns: 1fr; }
+.stat { border-top: 1px solid var(--line-strong); padding-top: 18px; }
+.stat .n { font-family: var(--serif); font-size: clamp(48px, 5.4vw, 92px); line-height: 1; }
+.stat .n.heat { color: var(--heat); }
+.stat p { margin: 10px 0 0; color: var(--muted); font-size: 16px; line-height: 1.45; max-width: 30ch; }
+.src { font-family: var(--mono); font-size: 11px; color: var(--faint); margin-top: 8px; }
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 5vw; align-items: center; }
+
+/* pipeline */
+.pipe { display: grid; grid-template-columns: repeat(6, 1fr); border: 1px solid var(--line); }
+.pipe > div { padding: 22px 18px; border-right: 1px solid var(--line); min-height: 210px; display: grid; align-content: start; gap: 10px; }
+.pipe > div:last-child { border-right: 0; }
+.pipe .t { font-family: var(--mono); font-size: 11px; color: var(--faint); }
+.pipe .name { font-family: var(--serif); font-size: 32px; }
+.pipe p { margin: 0; font-size: 14px; color: var(--muted); line-height: 1.45; }
+.pipe .who { margin-top: auto; font-family: var(--mono); font-size: 11px; color: var(--heat); }
+
+/* strata layers */
+.layers { display: grid; border: 1px solid var(--line); }
+.layer { display: grid; grid-template-columns: 170px 1fr auto; gap: 22px; align-items: center; padding: 18px 22px; border-bottom: 1px solid var(--line); }
+.layer:last-child { border-bottom: 0; }
+.layer .lab { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; }
+.layer .txt { font-size: 18px; }
+.layer .meta { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.layer.c { background: #1a1612; } .layer.c .lab { color: var(--heat); }
+.layer.i { background: #15130f; } .layer.i .lab { color: var(--text); }
+.layer.r .txt { text-decoration: line-through; color: var(--muted); } .layer.r .lab { color: var(--hot); }
+.layer.o .lab { color: var(--muted); }
+.layer.t { background: #0a0908; } .layer.t .txt { font-family: var(--mono); font-size: 13px; color: var(--faint); }
+
+/* mini table */
+.table { position: relative; aspect-ratio: 1.55; border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 40%, #2a4a3b 0%, var(--felt) 45%, var(--felt-dark) 100%);
+  box-shadow: 0 0 0 10px var(--rim), 0 0 0 11px #4d3925, 0 30px 70px rgba(0,0,0,.7), inset 0 0 90px rgba(0,0,0,.55); }
+.gauge { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 25%; aspect-ratio: 1; border-radius: 50%;
+  border: 8px solid rgba(241,235,223,.12); display: grid; place-content: center; text-align: center; background: rgba(0,0,0,.2); }
+.gauge::after { content: ""; position: absolute; inset: -8px; border-radius: 50%; border: 8px solid transparent;
+  border-top-color: var(--heat); border-right-color: var(--heat); transform: rotate(-20deg); }
+.gauge small { font-family: var(--mono); font-size: 10px; letter-spacing: .2em; color: rgba(241,235,223,.6); }
+.gauge b { font-family: var(--serif); font-weight: 400; font-size: clamp(40px, 3.6vw, 64px); line-height: .9; }
+.seat { position: absolute; transform: translate(-50%,-50%); display: grid; justify-items: center; gap: 4px; }
+.seat img.face { width: 64px; height: 64px; border-radius: 50%; background: var(--paper); box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--line-strong); }
+.seat.now img.face { box-shadow: 0 0 0 3px var(--bg), 0 0 0 6px var(--heat), 0 0 30px rgba(232,116,59,.5); }
+.seat span { font-family: var(--serif); font-size: 20px; }
+.hand { display: flex; gap: 2px; }
+.card { width: 40px; height: 56px; background: var(--paper); border-radius: 5px; display: grid; place-items: center;
+  box-shadow: 0 6px 12px rgba(0,0,0,.35); position: relative; }
+.card img { width: 72%; }
+.card i { position: absolute; left: 4px; top: 2px; font-family: var(--serif); font-style: normal; font-size: 12px; color: var(--ink); }
+.hand .card:nth-child(odd) { transform: rotate(-5deg); } .hand .card:nth-child(even) { transform: rotate(4deg) translateY(2px); }
+.pile { position: absolute; top: 50%; transform: translate(-50%,-50%); }
+.back { width: 54px; height: 76px; border-radius: 6px; background: linear-gradient(#7a2a22,#5e1f19);
+  box-shadow: inset 0 0 0 3px var(--paper), 0 6px 14px rgba(0,0,0,.4); display: grid; place-items: center;
+  font-family: var(--serif); font-style: italic; color: var(--paper); font-size: 22px; }
+.flying { position: absolute; left: 50%; top: 22%; transform: rotate(-12deg); animation: fly 2.6s cubic-bezier(.2,.7,.2,1) infinite; }
+@keyframes fly { 0% { left: 50%; top: 80%; opacity: 0; } 15% { opacity: 1; } 70% { left: 70%; top: 50%; opacity: 1; transform: rotate(6deg); } 100% { left: 70%; top: 50%; opacity: 0; } }
+.cards-legend { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px 28px; }
+.cards-legend div { display: flex; gap: 14px; align-items: center; font-size: 16px; color: var(--muted); }
+.cards-legend b { color: var(--text); font-weight: 500; }
+.cards-legend .card { width: 34px; height: 48px; flex: none; }
+
+/* chips */
+.chips { display: flex; flex-wrap: wrap; gap: 10px; }
+.chip { font-family: var(--mono); font-size: 13px; padding: 8px 12px; border: 1px solid var(--line-strong); border-radius: 999px; color: var(--muted); }
+.chip b { color: var(--text); font-weight: 500; }
+.tech { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); }
+.tech > div { padding: 24px 22px; border-right: 1px solid var(--line); display: grid; gap: 10px; align-content: start; }
+.tech > div:last-child { border-right: 0; }
+.tech .k { font-family: var(--mono); font-size: 11px; color: var(--heat); letter-spacing: .12em; }
+.tech .v { font-family: var(--serif); font-size: 30px; line-height: 1.05; }
+.tech p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.45; }
+.steps { counter-reset: s; display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 48px 1fr; gap: 16px; align-items: baseline; font-size: 21px; }
+.steps li::before { content: counter(s); font-family: var(--serif); font-size: 34px; color: var(--heat); }
+.steps li span { color: var(--muted); font-size: 16px; display: block; margin-top: 4px; }
+.verdict { display: inline-flex; gap: 14px; align-items: center; font-family: var(--mono); font-size: 14px; }
+.verdict .ok { padding: 8px 14px; background: var(--ok); color: #0e1a10; border-radius: 4px; }
+.verdict .no { padding: 8px 14px; border: 1px solid var(--hot); color: var(--hot); border-radius: 4px; }
+.placeholder { border: 1px dashed var(--line-strong); color: var(--faint); font-family: var(--mono); font-size: 12px; padding: 4px 8px; border-radius: 4px; }
+
+/* chrome */
+.bar { position: fixed; left: 0; bottom: 0; height: 3px; background: var(--heat); transition: width .45s ease; }
+.hud { position: fixed; right: 26px; bottom: 18px; font-family: var(--mono); font-size: 12px; color: var(--faint); display: flex; gap: 18px; }
+.brand { position: fixed; left: 7vw; top: 4vh; font-family: var(--serif); font-size: 24px; color: var(--muted); }
+.notes { position: fixed; left: 0; right: 0; bottom: 0; max-height: 34vh; overflow: auto; padding: 18px 7vw 28px; background: #151310ee;
+  border-top: 1px solid var(--line-strong); font-size: 17px; line-height: 1.55; color: var(--text); display: none; z-index: 10; }
+.notes.show { display: block; }
+.notes::before { content: "SPEAKER NOTES · press N to hide"; display: block; font-family: var(--mono); font-size: 11px; letter-spacing: .14em; color: var(--heat); margin-bottom: 8px; }
+.slide aside { display: none; }
+@media (max-width: 900px) { .split, .pipe, .tech { grid-template-columns: 1fr; } .row { grid-auto-flow: row; } }
+</style>
+</head>
+<body>
+<div class="brand">Strata</div>
+<main class="deck">
+
+<!-- 1 -->
+<section class="slide">
+  <div class="kicker">AIE Code Summit · Software Archaeology</div>
+  <h1>Strata</h1>
+  <p class="lead">An AI that rebuilds a program it is not allowed to read — and proves the rebuild behaves the same.</p>
+  <aside>Hi, we're Strata. We built an AI archaeologist. It studies a program it can't read, only by running it, writes it again in another language, and then proves the new version behaves exactly like the old one.</aside>
+</section>
+
+<!-- 2 -->
+<section class="slide">
+  <div class="kicker">The problem</div>
+  <h2>Software <em>outlives</em> its source code.</h2>
+  <div class="row">
+    <div class="stat"><div class="n heat">87%</div><p>of classic video games are no longer available to buy.</p><div class="src">Video Game History Foundation, 2023</div></div>
+    <div class="stat"><div class="n">Bricked</div><p>Devices die with their company: Spotify Car Thing, Revolv, Insteon.</p><div class="src">Humphries, "You Bought It, They Bricked It", 2026</div></div>
+    <div class="stat"><div class="n">C → Rust</div><p>DARPA's TRACTOR program exists to move legacy code to safe languages.</p><div class="src">DARPA TRACTOR</div></div>
+  </div>
+  <aside>Programs outlive the people and the code that made them: old games, devices whose company died, legacy systems. Often the only evidence left is how the program behaves.</aside>
+</section>
+
+<!-- 3 -->
+<section class="slide">
+  <div class="kicker">Why "just ask an LLM" fails</div>
+  <h2>LLMs <em>guess</em>. Guesses look like working code.</h2>
+  <div class="row">
+    <div class="stat"><div class="n heat">1 in 5</div><p>"solved" patches from top agents on SWE-bench Verified are actually wrong.</p><div class="src">SWE-ABS, 2026</div></div>
+    <div class="stat"><div class="n">99% → 40%</div><p>Decompiled code compiles 99% of the time, but behaves correctly only 32–42%.</p><div class="src">Agent4Decompile, 2026</div></div>
+    <div class="stat"><div class="n">Recall</div><p>On a famous program, a model can recite the answer instead of discovering it.</p><div class="src">Our control: hidden rule mutations</div></div>
+  </div>
+  <aside>Ask a model to port software and you get code that looks right. Research shows compiling isn't correctness, and passing tests isn't either. And on well-known software the model just recalls it. We need evidence, not recall.</aside>
+</section>
+
+<!-- 4 -->
+<section class="slide">
+  <div class="kicker">The black box</div>
+  <div class="split">
+    <div style="display:grid;gap:3vh">
+      <h2>An original card game the AI <em>has never seen</em>.</h2>
+      <p class="lead">“Pressure”: play cards, push a shared meter, don't be the one who overloads it. Hidden state, chained effects, randomness — like a real legacy system, small enough for one day.</p>
+      <div class="chips"><span class="chip"><b>Secret</b> rule mutations each run</span><span class="chip"><b>Opaque</b> card names mode</span><span class="chip">runs as a <b>separate process</b></span></div>
+    </div>
+    <div class="table">
+      <div class="gauge"><small>PRESSURE</small><b>9</b></div>
+      <div class="pile" style="left:20%"><div class="back">S</div></div>
+      <div class="pile" style="left:80%"><div class="card" style="width:54px;height:76px"><i>3</i><img src="../ui/static/assets/cards/2699.svg" alt=""></div></div>
+      <div class="flying"><div class="card"><i>V</i><img src="../ui/static/assets/cards/1F4A8.svg" alt=""></div></div>
+      <div class="seat now" style="left:50%;top:82%"><div class="hand"><div class="card"><i>J</i><img src="../ui/static/assets/cards/1F512.svg" alt=""></div><div class="card"><i>×2</i><img src="../ui/static/assets/cards/23E9.svg" alt=""></div><div class="card"><i>2</i><img src="../ui/static/assets/cards/2699.svg" alt=""></div></div><img class="face" src="../ui/static/assets/faces/player-1.svg" alt=""><span>Player 1</span></div>
+      <div class="seat" style="left:50%;top:18%"><img class="face" src="../ui/static/assets/faces/player-2.svg" alt=""><span>Player 2</span><div class="hand"><div class="card"><i>R</i><img src="../ui/static/assets/cards/1F504.svg" alt=""></div><div class="card"><i>S</i><img src="../ui/static/assets/cards/1F50D.svg" alt=""></div></div></div>
+    </div>
+  </div>
+  <aside>Our black box is an original game we wrote. The AI never sees its code. Every run we secretly change a few rules, so reciting any known game fails visibly. Whatever it learns has to come from evidence.</aside>
+</section>
+
+<!-- 5 -->
+<section class="slide">
+  <div class="kicker">How Strata works</div>
+  <h2>Dig. Guess. Test. Rebuild. <em>Prove.</em></h2>
+  <div class="pipe">
+    <div><span class="t">T3</span><span class="name">Survey</span><p>Reads the manual and partial code into low-trust claims. Ranks what to investigate.</p><span class="who">Muse · SubQ</span></div>
+    <div><span class="t">T4</span><span class="name">Check</span><p>Tests every claim against recorded games. Contradictions become findings.</p><span class="who">code</span></div>
+    <div><span class="t">T5</span><span class="name">Probe</span><p>Runs designed experiments on the live binary. Predicts first, logs surprises.</p><span class="who">SubQ picks the experiment</span></div>
+    <div><span class="t">T6</span><span class="name">Hypothesize</span><p>Proposes rules as code, scores them on held-out games, confirms or refutes.</p><span class="who">Muse proposes · code scores</span></div>
+    <div><span class="t">T7</span><span class="name">Rebuild</span><p>Writes a JavaScript engine from Confirmed rules only.</p><span class="who">Muse · sandboxed</span></div>
+    <div><span class="t">T8</span><span class="name">Verify</span><p>Replays and fuzzes both versions side by side. Accept or block.</p><span class="who">code only, no model</span></div>
+  </div>
+  <aside>Six stages. It surveys the docs, checks claims against recorded games, runs its own experiments, turns them into rules, rebuilds the program in JavaScript, and an independent verifier with no AI in it decides whether the rebuild is accepted.</aside>
+</section>
+
+<!-- 6 -->
+<section class="slide">
+  <div class="kicker">The evidence ledger</div>
+  <h2>Models propose. <em>Code decides.</em></h2>
+  <div class="layers">
+    <div class="layer c"><span class="lab">CONFIRMED</span><span class="txt">Vent lowers pressure by 4</span><span class="meta">won experiment · held-out games</span></div>
+    <div class="layer i"><span class="lab">INFERRED</span><span class="txt">Jam cancels the next player's next card</span><span class="meta">fits evidence · alternatives open</span></div>
+    <div class="layer r"><span class="lab">REFUTED</span><span class="txt">Vent lowers pressure by 3 (as the manual says)</span><span class="meta">counterexample t-000035</span></div>
+    <div class="layer o"><span class="lab">OBSERVED</span><span class="txt">Playing Vent at 5 left pressure at 1</span><span class="meta">seen 12× · no interpretation</span></div>
+    <div class="layer t"><span class="lab" style="color:var(--faint)">TRACES</span><span class="txt">t-000035 g-0002 s0 play vent  p=1  →  seat 1 (1 act)</span><span class="meta">22,736 steps</span></div>
+  </div>
+  <aside>Everything lands in a ledger, in layers like rock strata. Raw traces at the bottom, then what was observed, then guesses, then proven rules. Every claim cites trace IDs. A model can suggest a rule, but only code can mark it Confirmed. Here the manual said vent lowers pressure by 3 — the evidence said 4. That's a planted mutation, caught.</aside>
+</section>
+
+<!-- 7 -->
+<section class="slide">
+  <div class="kicker">Proof, not vibes</div>
+  <h2>Equivalence you can <em>check</em>.</h2>
+  <div class="split">
+    <ol class="steps">
+      <li><div>Replay every recorded game on both versions<span>Python original vs. JavaScript rebuild, step by step</span></div></li>
+      <li><div>Fuzz thousands of new scripted games<span>same deck order for both, so results compare exactly</span></div></li>
+      <li><div>Shrink any difference to the shortest failing game<span>sent back to the rebuilder as a counterexample</span></div></li>
+    </ol>
+    <div style="display:grid;gap:26px">
+      <div class="verdict"><span class="ok">ACCEPTED</span><span>N games · 0 divergences</span><span class="placeholder">fill in live number</span></div>
+      <div class="verdict"><span class="no">BLOCKED</span><span>shortest counterexample attached</span></div>
+      <div class="chips"><span class="chip"><b>Held-out</b> games never used to fit</span><span class="chip"><b>Zero-probe</b> ablation</span><span class="chip"><b>Opaque</b> names control</span><span class="chip"><b>Mutation</b> reveal</span></div>
+    </div>
+  </div>
+  <aside>Proof is mechanical. Replay every recorded game on both versions, fuzz thousands more with the same scripted randomness, and shrink any difference to the shortest failing game. The verifier says Accepted or Blocked. And our controls show it learned rather than recalled.</aside>
+</section>
+
+<!-- 8 -->
+<section class="slide">
+  <div class="kicker">Built with</div>
+  <h2>Two model families, <em>neither</em> one decides.</h2>
+  <div class="tech">
+    <div><span class="k">META MUSE SPARK</span><span class="v">Writes</span><p>Hypotheses as executable rules, experiments, the JavaScript rebuild, the report.</p></div>
+    <div><span class="k">SUBQ SNAP 1.1</span><span class="v">Chooses</span><p>384K-token decisions over all the evidence: next experiment, surprise triage, claim audit.</p></div>
+    <div><span class="k">FETCH.AI · ASI:ONE</span><span class="v">Talks</span><p>uAgents on Agentverse. Ask it in chat: “why do you think Jam does that?”</p></div>
+    <div><span class="k">DETERMINISTIC CODE</span><span class="v">Decides</span><p>Scoring, replay, fuzzing, accept / block. AI code runs sandboxed, no keys, spending cap.</p></div>
+  </div>
+  <aside>Muse writes, SubQ chooses with long context over all the evidence, Fetch.ai agents let you talk to it in ASI:One, and plain deterministic code makes every final decision. AI-written code runs in a sandbox with no keys.</aside>
+</section>
+
+<!-- 9 -->
+<section class="slide">
+  <div class="kicker">Live demo</div>
+  <h2>Watch it learn a game <em>from scratch</em>.</h2>
+  <ol class="steps">
+    <li><div>The game screen<span>the AI plays thousands of games — cards fly, pressure rises, players get knocked out</span></div></li>
+    <li><div>Behind the scenes<span>what it saw, what it guesses, what it proved — in plain words</span></div></li>
+    <li><div>The surprise<span>the manual says one thing, the evidence says another: a hidden mutation, caught</span></div></li>
+    <li><div>The verdict<span>rebuild accepted, and the planted mutations revealed next to the ones it found</span></div></li>
+  </ol>
+  <aside>Switch to the live view now. 1) Start the game screen. 2) Open Behind the scenes. 3) Point at the Vent fact. 4) Show the verifier verdict and the mutation reveal.</aside>
+</section>
+
+<!-- 10 -->
+<section class="slide">
+  <div class="kicker">Strata</div>
+  <h1 style="font-size:clamp(54px,7vw,118px)">Software that outlived its creator — <em>rebuilt, with proof.</em></h1>
+  <p class="lead">Next: real abandoned binaries, network protocols of bricked devices, and legacy code ports.</p>
+  <aside>The same loop works for any program that outlived its makers: abandoned tools, dead device protocols, legacy systems. Strata: rebuilt, with proof. Thank you.</aside>
+</section>
+
+</main>
+<div class="notes" id="notes"></div>
+<div class="bar" id="bar"></div>
+<div class="hud"><span>← → navigate · N notes · F fullscreen</span><span id="count"></span></div>
+<script>
+const slides = [...document.querySelectorAll(".slide")];
+const notes = document.getElementById("notes");
+let index = Math.max(0, Math.min(slides.length - 1, Number.parseInt(location.hash.slice(1) || "1", 10) - 1));
+function show(next) {
+  index = Math.max(0, Math.min(slides.length - 1, next));
+  slides.forEach((slide, i) => slide.classList.toggle("active", i === index));
+  document.getElementById("count").textContent = `${index + 1} / ${slides.length}`;
+  document.getElementById("bar").style.width = `${((index + 1) / slides.length) * 100}%`;
+  notes.textContent = slides[index].querySelector("aside")?.textContent.trim() || "";
+  history.replaceState(null, "", `#${index + 1}`);
+}
+document.addEventListener("keydown", (event) => {
+  if (["ArrowRight", "PageDown", " ", "Enter"].includes(event.key)) { event.preventDefault(); show(index + 1); }
+  if (["ArrowLeft", "PageUp", "Backspace"].includes(event.key)) { event.preventDefault(); show(index - 1); }
+  if (event.key === "Home") show(0);
+  if (event.key === "End") show(slides.length - 1);
+  if (event.key.toLowerCase() === "n") notes.classList.toggle("show");
+  if (event.key.toLowerCase() === "f") (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {});
+});
+document.addEventListener("click", (event) => { if (!event.target.closest("a,button")) show(index + (event.clientX > innerWidth / 3 ? 1 : -1)); });
+show(index);
+</script>
+</body>
+</html>
