@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Strata</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="bar">
+    <div class="mark">STRATA</div>
+    <div class="tagline">Reading a black box, layer by layer.</div>
+    <div class="controls">
+      <span id="status" class="status" data-state="idle">IDLE</span>
+      <div class="speed" role="group" aria-label="Speed">
+        <button type="button" data-speed="slow">0.5×</button>
+        <button type="button" data-speed="normal" aria-pressed="true">1×</button>
+        <button type="button" data-speed="fast">5×</button>
+      </div>
+      <button type="button" id="toggle" class="primary">Start</button>
+    </div>
+  </header>
+
+  <main class="stage">
+    <section class="panel box" aria-label="Black box">
+      <div class="eyebrow"><span>01</span>THE BLACK BOX<span id="game-label" class="tag">—</span><span id="split" class="tag"></span></div>
+
+      <div class="pressure">
+        <div class="label">PRESSURE</div>
+        <div id="pressure" class="num">0</div>
+        <div class="scale" id="scale" aria-hidden="true"></div>
+        <div id="limit-note" class="note">Limit: unknown</div>
+      </div>
+
+      <div id="seats" class="seats"></div>
+
+      <div class="last">
+        <div class="label">LAST STEP</div>
+        <div id="last" class="last-line">Waiting for the first move.</div>
+      </div>
+
+      <div class="piles">
+        <div><span class="label">DRAW PILE</span><b id="pile">—</b></div>
+        <div><span class="label">DISCARD</span><b id="discard">—</b></div>
+        <div><span class="label">TURN</span><b id="turn">—</b></div>
+      </div>
+    </section>
+
+    <section class="panel strata" aria-label="Evidence">
+      <div class="eyebrow"><span>02</span>THE EVIDENCE<span class="tag dim">youngest on top · bedrock below</span></div>
+      <div id="strata" class="layers"></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div><span class="label">GAMES</span><b id="games">0</b></div>
+    <div><span class="label">TRACES</span><b id="traces">0</b></div>
+    <div><span class="label">HELD OUT</span><b id="heldout">0</b></div>
+    <div><span class="label">SURPRISES</span><b id="surprises">0</b></div>
+    <div class="run"><span class="label">RUN</span><b id="run">—</b></div>
+  </footer>
+
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>
