@@ -34,7 +34,9 @@ from simulate.recorder import TraceRecorder
 from simulate.run import RunConfig, play_game, spec_for
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-STATIC_FILES = frozenset({"index.html", "style.css", "app.js", "table.js", "strata.js", "observed.js"})
+STATIC_FILES = frozenset(
+    {"index.html", "style.css", "app.js", "arena.js", "backstage.js", "cards.js", "observed.js", "words.js"}
+)
 LEDGER_STATUSES = ("observed", "inferred", "confirmed", "refuted", "open")
 
 
@@ -42,7 +44,7 @@ class StreamParams(BaseModel):
     model_config = ConfigDict(extra="ignore")
     seed: int = Field(default=42, ge=0, le=1_000_000_000)
     mutations: int = Field(default=2, ge=0, le=6)
-    delay: float = Field(default=0.15, ge=0.0, le=2.0)
+    delay: float = Field(default=1.0, ge=0.0, le=3.0)
     start: int = Field(default=0, ge=0, le=1_000_000)
     games: int = Field(default=100_000, ge=1, le=100_000)
 
