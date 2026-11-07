@@ -31,7 +31,8 @@ function setStatus(text, state) {
 
 async function handle(message) {
   if (message.kind === "game") {
-    session = { ...session, before: message.data.view, nextIndex: message.data.index + 1 };
+    const { index, label, players } = message.data;
+    session = { ...session, before: message.data.view, nextIndex: index + 1, game: { index, label, players } };
     await arena.startGame(message.data);
   } else if (message.kind === "trace") {
     const trace = message.data;
@@ -43,6 +44,7 @@ async function handle(message) {
     await arena.step(trace);
   } else if (message.kind === "end") {
     totals = { ...totals, games: totals.games + 1 };
+    if (session.game) backstage.addResult({ ...session.game, winner: message.data.winner, steps: message.data.steps });
   }
   backstage.setStats(totals, facts.list().length);
 }
@@ -53,7 +55,8 @@ async function drain() {
   while (queue.length) {
     const [next, ...rest] = queue;
     queue = rest;
-    arena.setTempo(queue.length > BACKLOG_RUSH ? 0.15 : SPEEDS[session.speed].tempo);
+    const tableHidden = $("#arena").hidden; // nobody is watching the table: skip its animations
+    arena.setTempo(tableHidden ? 0.01 : queue.length > BACKLOG_RUSH ? 0.15 : SPEEDS[session.speed].tempo);
     await handle(next);
   }
   draining = false;

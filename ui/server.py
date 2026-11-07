@@ -34,7 +34,9 @@ from simulate.recorder import TraceRecorder
 from simulate.run import RunConfig, play_game, spec_for
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-PAGE_FILES = {"index.html", "style.css", "app.js", "arena.js", "backstage.js", "cards.js", "observed.js", "words.js"}
+PAGE_FILES = {
+    "index.html", "style.css", "app.js", "arena.js", "backstage.js", "cards.js", "observed.js", "results.js", "words.js",
+}
 # bundled art so the demo works offline (OpenMoji CC BY-SA 4.0, DiceBear Notionists CC0)
 ASSET_FILES = {
     f"assets/{path.parent.name}/{path.name}"
