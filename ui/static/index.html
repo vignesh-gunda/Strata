@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Strata</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="bar">
+    <div class="mark">STRATA</div>
+    <nav class="tabs" role="tablist" aria-label="Screens">
+      <button type="button" role="tab" data-tab="game" aria-selected="true">The game</button>
+      <button type="button" role="tab" data-tab="backstage" aria-selected="false">Behind the scenes</button>
+    </nav>
+    <div class="controls">
+      <span id="status" class="status" data-state="idle">READY</span>
+      <div class="speed" role="group" aria-label="Speed">
+        <button type="button" data-speed="slow">Slow</button>
+        <button type="button" data-speed="normal" aria-pressed="true">Normal</button>
+        <button type="button" data-speed="fast">Fast</button>
+      </div>
+      <button type="button" id="toggle" class="primary">Start</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="arena" data-view="game" class="view game-view" aria-label="The game"></section>
+    <section id="backstage" data-view="backstage" class="view backstage-view" aria-label="Behind the scenes" hidden></section>
+  </main>
+
+  <footer class="foot">
+    <span>An AI is studying a card game it has never seen, only by watching it.</span>
+    <span class="credits">Card art: OpenMoji (CC BY-SA 4.0) · Portraits: DiceBear Notionists (CC0)</span>
+    <span class="run">run <b id="run">—</b></span>
+  </footer>
+
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>
