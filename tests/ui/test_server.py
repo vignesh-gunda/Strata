@@ -51,6 +51,14 @@ def test_page_and_assets_are_served(base_url):
     assert get(base_url + "/static/app.js")[0] == 200
 
 
+def test_bundled_art_is_served_offline(base_url):
+    for path in ("/static/assets/cards/2699.svg", "/static/assets/faces/player-4.svg"):
+        status, kind, body = get(base_url + path)
+        assert status == 200 and kind == "image/svg+xml" and body.lstrip().startswith(b"<svg")
+    with pytest.raises(urllib.error.HTTPError):
+        get(base_url + "/static/assets/../server.py")
+
+
 def test_unknown_and_traversal_paths_are_404(base_url):
     for path in ("/static/../server.py", "/static/secret.txt", "/nope"):
         with pytest.raises(urllib.error.HTTPError) as error:

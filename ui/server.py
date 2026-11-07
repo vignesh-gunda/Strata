@@ -34,9 +34,14 @@ from simulate.recorder import TraceRecorder
 from simulate.run import RunConfig, play_game, spec_for
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-STATIC_FILES = frozenset(
-    {"index.html", "style.css", "app.js", "arena.js", "backstage.js", "cards.js", "observed.js", "words.js"}
-)
+PAGE_FILES = {"index.html", "style.css", "app.js", "arena.js", "backstage.js", "cards.js", "observed.js", "words.js"}
+# bundled art so the demo works offline (OpenMoji CC BY-SA 4.0, DiceBear Notionists CC0)
+ASSET_FILES = {
+    f"assets/{path.parent.name}/{path.name}"
+    for path in (STATIC_DIR / "assets").glob("*/*.svg")
+    if path.parent.name in ("cards", "faces")
+}
+STATIC_FILES = frozenset(PAGE_FILES | ASSET_FILES)
 LEDGER_STATUSES = ("observed", "inferred", "confirmed", "refuted", "open")
 
 

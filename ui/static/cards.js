@@ -1,8 +1,9 @@
 // Playing cards and player portraits.
-// Card art: OpenMoji (CC BY-SA 4.0). Portraits: DiceBear "Notionists" (CC0).
+// Card art: OpenMoji 15.1 (CC BY-SA 4.0). Portraits: DiceBear "Notionists" (CC0).
+// Both are bundled under /static/assets so the demo works without internet.
 
-const ART_BASE = "https://cdn.jsdelivr.net/npm/openmoji@15.1.0/color/svg/";
-const FACE_BASE = "https://api.dicebear.com/9.x/notionists/svg";
+const ART_BASE = "/static/assets/cards/";
+const FACE_BASE = "/static/assets/faces/";
 
 export const CARD_INFO = {
   gear1: { name: "Gear", index: "1", art: "2699", kind: "gear" },
@@ -64,7 +65,7 @@ export function avatar(seat) {
   const img = el("img", "avatar");
   img.alt = "";
   img.draggable = false;
-  img.src = `${FACE_BASE}?seed=strata-player-${seat + 1}&backgroundColor=${SEAT_BACKDROPS[seat % SEAT_BACKDROPS.length]}`;
+  img.src = `${FACE_BASE}player-${(seat % SEAT_BACKDROPS.length) + 1}.svg`;
   img.addEventListener("error", () => img.replaceWith(el("span", "avatar-fallback", String(seat + 1))), { once: true });
   return img;
 }
