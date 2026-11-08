@@ -13,6 +13,7 @@ from typing import Any
 from auditor.main.corpus import GameRecord, TraceStore, load_games, load_seed_corpus
 from ledger.main.models import Status
 from ledger.main.store import Ledger
+from livefeed.main.events import EventLog
 from sandbox.main.binary import BinaryProcess
 from sandbox.main.digsite_fs import DigSiteFS
 
@@ -53,14 +54,14 @@ def run_seed_probes(runner: GameRunner, hand_size: int, only: set[str] | None = 
 
 
 def run_random_probes(runner: GameRunner, count: int, split: str = "train",
-                      first_seed: int = 1000) -> list[GameRecord]:
+                      first_seed: int = 1000, max_steps: int = 250) -> list[GameRecord]:
     """Extra games with varied players and policies: more evidence for rare events."""
     policies = ["random", "draw_first", "play_first", "random"]
     games = []
     for n in range(count):
         games.append(runner.run_random(seed=first_seed + n, players=2 + n % 3,
                                        policy=policies[n % len(policies)], split=split,
-                                       max_steps=250))
+                                       max_steps=max_steps))
     return games
 
 
@@ -83,7 +84,7 @@ def main(argv: list[str] | None = None) -> int:
     with BinaryProcess(fs) as box:
         runner = GameRunner(box, store, ledger=ledger, run_id=args.run_id,
                             budget=ProbeBudget(max_games=args.max_games),
-                            save_path=run_dir / "probe_games.jsonl")
+                            save_path=run_dir / "probe_games.jsonl", events=EventLog(run_dir))
         games = run_seed_probes(runner, hand_size_for(ledger, store), only)
     for game in games:
         print(f"{game.meta['experiment_id']:16} steps={len(game.steps):3} "

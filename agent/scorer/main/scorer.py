@@ -19,6 +19,7 @@ from typing import Any
 from auditor.main.corpus import GameRecord, ScoringCorpus, TraceStore
 from ledger.main.models import Claim, Source, Status
 from ledger.main.store import Ledger, LedgerError
+from livefeed.main.events import EventLog, safe_emit
 from sandbox.main.rule_worker import RuleError, RuleWorker
 
 from .compare import matches, matches_setup
@@ -79,7 +80,8 @@ class GroupReport:
 
 class Scorer:
     def __init__(self, ledger: Ledger, store: TraceStore, *, min_heldout: int = 3,
-                 require_probe_separation: bool = True):
+                 require_probe_separation: bool = True, events: EventLog | None = None):
+        self.events = events
         self.ledger = ledger
         self.store = store
         self.min_heldout = min_heldout
@@ -93,10 +95,17 @@ class Scorer:
             return
         self.ledger.set_status(claim_id, Status.REFUTED, trace_ids,
                                authority=self._authority, reason=reason)
+        claim = self.ledger.get(claim_id)
+        safe_emit(self.events, "score", {"outcome": "refuted", "claim_id": claim_id, "text": claim.text,
+                                        "source": claim.source.value}, trace_ids=trace_ids[:3])
 
-    def _confirm(self, claim_id: str, trace_ids: list[str], reason: str) -> None:
+    def _confirm(self, claim_id: str, trace_ids: list[str], reason: str, heldout: int = 0) -> None:
         self.ledger.set_status(claim_id, Status.CONFIRMED, trace_ids,
                                authority=self._authority, reason=reason)
+        claim = self.ledger.get(claim_id)
+        safe_emit(self.events, "score", {"outcome": "confirmed", "claim_id": claim_id,
+                                        "text": claim.text, "heldout": heldout},
+                  trace_ids=trace_ids[:3])
 
     # ---------- running a rule over traces ----------
     def score_rule(self, code: str, corpus: ScoringCorpus | None = None) -> RuleScore:
@@ -243,7 +252,8 @@ class Scorer:
                 evidence = sorted(held)[:3] + (probe_sep or separating)[:3]
                 self._confirm(claim.id, evidence,
                               f"{score.applicable['heldout']} held-out steps correct; "
-                              f"separating step(s) {(probe_sep or separating)[:3]}")
+                              f"separating step(s) {(probe_sep or separating)[:3]}",
+                              heldout=score.applicable["heldout"])
                 for trace_id in (probe_sep or separating)[:3]:
                     found = self.store.find_step(trace_id)
                     if found and found[0].meta.get("experiment_id"):

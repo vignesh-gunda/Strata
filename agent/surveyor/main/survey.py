@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from ledger.main.models import Source
+from livefeed.main.events import EventLog, safe_emit
 from ledger.main.store import Ledger
 from sandbox.main.digsite_fs import DigSiteFS
 from sandbox.main.metadata import binary_metadata
@@ -60,7 +61,8 @@ def _view_keys(fs: DigSiteFS) -> set[str] | None:
 
 
 def run_survey(fs: DigSiteFS, ledger: Ledger, *, run_dir: Path | None = None,
-               muse: Any = None, run_id: str = "r-01") -> SurveyResult:
+               muse: Any = None, run_id: str = "r-01",
+               events: EventLog | None = None) -> SurveyResult:
     manual_path, code_paths = _artifact_paths(fs)
     manual_text = fs.read_text(manual_path)
     code_files = {p: fs.read_text(p) for p in code_paths}
@@ -122,6 +124,8 @@ def run_survey(fs: DigSiteFS, ledger: Ledger, *, run_dir: Path | None = None,
         run_dir.mkdir(parents=True, exist_ok=True)
         (run_dir / "probe_list.json").write_text(json.dumps(probes, indent=2))
         (run_dir / "survey.json").write_text(json.dumps(summary, indent=2))
+    safe_emit(events, "survey", {"claims": summary["claims"], "probes": len(probes),
+                                "unknowns": sum(1 for c in ledger.all_claims() if c.kind == "unknown")})
     return SurveyResult(probe_list=probes, summary=summary)
 
 
@@ -141,7 +145,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.use_muse:
         from llm.main.muse import MuseClient
         muse = MuseClient()
-    result = run_survey(fs, ledger, run_dir=run_dir, muse=muse, run_id=args.run_id)
+    result = run_survey(fs, ledger, run_dir=run_dir, muse=muse, run_id=args.run_id,
+                        events=EventLog(run_dir))
 
     summary = result.summary
     print(f"Survey {args.run_id}: {summary['claims']} claims, {summary['counts']}")

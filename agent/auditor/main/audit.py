@@ -16,6 +16,7 @@ from typing import Any
 
 from ledger.main.models import Claim, FindingKind, Source, Status
 from ledger.main.store import Ledger
+from livefeed.main.events import EventLog, safe_emit
 from sandbox.main.digsite_fs import DigSiteFS
 from scorer.main.scorer import Scorer
 from surveyor.main.probes import build_probe_list
@@ -171,7 +172,8 @@ def _triage(subq: Any, ledger: Ledger, corpus: FittingCorpus, report: AuditRepor
                                                f"(confidence {answer.confidence:.2f})")
 
 
-def run_audit(ledger: Ledger, scorer: Scorer, corpus: FittingCorpus, *, subq: Any = None) -> AuditReport:
+def run_audit(ledger: Ledger, scorer: Scorer, corpus: FittingCorpus, *, subq: Any = None,
+              events: EventLog | None = None) -> AuditReport:
     report = AuditReport()
     for claim in ledger.open_questions():
         rule = claim.rule or {}
@@ -209,6 +211,8 @@ def run_audit(ledger: Ledger, scorer: Scorer, corpus: FittingCorpus, *, subq: An
     _add_findings(ledger, corpus, report)
     if subq is not None:
         _triage(subq, ledger, corpus, report)
+    safe_emit(events, "audit", {"refuted": len(report.refuted), "supported": len(report.supported),
+                               "undecided": len(report.undecided)})
     return report
 
 
@@ -225,12 +229,13 @@ def main(argv: list[str] | None = None) -> int:
     for game in load_games(run_dir / "probe_games.jsonl"):
         store.add_game(game)
     ledger = Ledger(run_dir / "ledger.jsonl", trace_validator=store.exists)
-    scorer = Scorer(ledger, store)
+    events = EventLog(run_dir)
+    scorer = Scorer(ledger, store, events=events)
     subq = None
     if args.use_subq:
         from llm.main.subq import SubqClient
         subq = SubqClient()
-    report = run_audit(ledger, scorer, store.fitting(), subq=subq)
+    report = run_audit(ledger, scorer, store.fitting(), subq=subq, events=events)
     (run_dir / "audit.json").write_text(json.dumps(report.summary() | {
         "refuted": report.refuted, "undecided": [u["claim_id"] for u in report.undecided],
         "triage": report.triage}, indent=2))

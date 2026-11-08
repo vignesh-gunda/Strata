@@ -15,6 +15,7 @@ from typing import Any, Callable, Protocol
 from auditor.main.corpus import GameRecord, TraceStore
 from ledger.main.models import Source, Status
 from ledger.main.store import Ledger
+from livefeed.main.events import EventLog, safe_emit
 from sandbox.main.rule_worker import RuleError, RuleWorker
 from scorer.main.compare import matches
 
@@ -180,6 +181,7 @@ class GameRunner:
     run_id: str = "r-01"
     budget: ProbeBudget = field(default_factory=ProbeBudget)
     save_path: Path | None = None
+    events: EventLog | None = None
 
     def run(self, *, players: int, script: dict[str, Any], chooser: Chooser, label: str,
             split: str = "train", max_steps: int = 200,
@@ -233,6 +235,12 @@ class GameRunner:
             self.save_path.parent.mkdir(parents=True, exist_ok=True)
             with self.save_path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(game.to_json()) + "\n")
+        safe_emit(self.events, "probe",
+                  {"label": label, "title": (meta or {}).get("title"), "split": split,
+                   "experiment": (meta or {}).get("experiment_id"),
+                   "steps": len(game.steps), "predicted": bool(self.predictor),
+                   "surprises": sum(1 for s in game.steps if s.get("surprise"))},
+                  trace_ids=[game.steps[0]["trace_id"], game.steps[-1]["trace_id"]] if game.steps else [])
         return game
 
     def run_experiment(self, exp: Experiment, hand_size: int, seed: int = 0) -> GameRecord:
