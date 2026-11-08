@@ -19,6 +19,8 @@ from typing import Any, Callable
 from auditor.main.corpus import TraceStore
 from auditor.main.digest import step_line
 from hypothesizer.main.groups import GROUPS
+from .languages import JAVASCRIPT, LanguageConfig, LanguageError
+from livefeed.main.events import EventLog, safe_emit
 from llm.main.muse import MuseClient
 from sandbox.main.binary import BinaryError, BinaryProcess, BinaryRequestError
 
@@ -31,38 +33,26 @@ SYSTEM = (
     "explicit unknown that throws. Correctness against recorded behavior is all that matters."
 )
 
-ENGINE_API = '''\
-engine.js is a CommonJS module that exports exactly:
-  newGame(players, deck)  -> state     // players 2-4; deck = array of card names, dealt round-robin
-  legalActions(state)     -> array of actions, SORTED by action type then by card name (both
-                             alphabetical, so draw < pass < play, and play cards a..z)
-  act(state, action)      -> { state, events }   // action is one of legalActions(state); apply it
-  view(state)             -> the public view object (keys exactly as in the Python rules)
-  DECK_COUNTS             -> optional {cardName: count} of a full deck
-  UNKNOWN_BEHAVIORS       -> array of strings: behaviors you could not implement from the rules
-A helper `unknown(description)` should throw `Object.assign(new Error('unknown behavior: ' + description), {kind: 'unknown_behavior'})`.
-Actions: {"type":"play","card":NAME} | {"type":"draw"} | {"type":"pass"}  (a play always has a card;
-draw and pass have NO card key). Events are plain objects exactly as the rules emit them, in order.
-Mutating the state in place and returning it is fine. JSON key order does not matter; values do.
-'''
+ENGINE_API = JAVASCRIPT.engine_api
 
 
-class RebuildError(RuntimeError):
+class RebuildError(LanguageError):
     pass
 
 
 @dataclass
 class RebuildResult:
     directory: Path
-    engine_js: str
+    engine_js: str                              # the engine source, in whichever language was asked for
     unknown_behaviors: list[str] = field(default_factory=list)
     syntax_ok: bool = False
     smoke_ok: bool = False
     problems: list[str] = field(default_factory=list)
+    language: LanguageConfig = JAVASCRIPT
 
     @property
     def command(self) -> list[str]:
-        return ["node", str(self.directory / "server.js")]
+        return self.language.command(self.directory)
 
     @property
     def ready(self) -> bool:
@@ -106,7 +96,7 @@ def unknown_behaviors_of(directory: Path) -> list[str]:
 def smoke_game(command: list[str], deck: list[str], players: int = 2, max_steps: int = 60) -> str | None:
     """Play one game through the contract. Returns None if every reply is well formed."""
     try:
-        with BinaryProcess(command=command, timeout=15) as box:
+        with BinaryProcess(command=command, timeout=10) as box:
             started = box.new_game(players, {"deck": deck})
             view = started["view"]
             for key in ("players", "hands", "alive", "discard", "draw_pile_size", "current_seat",
@@ -138,8 +128,18 @@ def smoke_game(command: list[str], deck: list[str], players: int = 2, max_steps:
 
 
 class Rebuilder:
-    def __init__(self, muse: MuseClient, store: TraceStore, *, lead_code: str = ""):
+    def __init__(self, muse: MuseClient, store: TraceStore, *, lead_code: str = "",
+                 language: LanguageConfig = JAVASCRIPT):
         self.muse, self.store, self.lead_code = muse, store, lead_code
+        self.language = language
+
+    def _extract(self, reply: str) -> str:
+        if self.language is JAVASCRIPT:
+            return extract_js(reply)
+        try:
+            return self.language.extract(reply)
+        except LanguageError as error:
+            raise RebuildError(str(error)) from error
 
     # ---------- facts the prompt may state (observed in the fitting data) ----------
     def _facts(self) -> dict[str, Any]:
@@ -168,7 +168,7 @@ class Rebuilder:
         covered = {r["group"] for r in rules}
         missing = [g for g in GROUPS if g not in covered]
         facts = self._facts()
-        parts = [ENGINE_API,
+        parts = [self.language.engine_api,
                  f"FACTS observed in recorded games: cards = {facts['cards']}; a full deck holds "
                  f"{sum(facts['deck_counts'].values())} cards: {facts['deck_counts']}; "
                  f"{facts['hand_size']} cards are dealt to each player.",
@@ -185,8 +185,8 @@ class Rebuilder:
             parts.append("RECOVERED SOURCE FRAGMENT: structure only (turn flow in _finish_action and "
                          "_advance_turn is a useful skeleton). Its lost functions are exactly what the "
                          "confirmed rules above must supply; do not trust values in it.\n" + self.lead_code)
-        parts.append("TASK: write the complete engine.js. Reply with one ```javascript block and nothing "
-                     "else. It must run under Node 20 with no dependencies.")
+        parts.append(f"TASK: write the complete {self.language.engine_file}. Reply with one "
+                     f"```{self.language.fence} block and nothing else. {self.language.prompt_hints}")
         return "\n\n".join(parts)
 
     def repair_prompt(self, engine_js: str, counterexample: dict[str, Any],
@@ -196,10 +196,10 @@ class Rebuilder:
             f"  step {t['step']}: action={json.dumps(t['action'])}\n    events={json.dumps(t['events'])}\n"
             f"    view={json.dumps(t['view'])}" for t in ce.get("reference_trace", []))
         return "\n\n".join([
-            ENGINE_API,
-            "Your engine.js below is BLOCKED by the Verifier. The original program behaves differently "
+            self.language.engine_api,
+            f"Your {self.language.engine_file} below is BLOCKED by the Verifier. The original program behaves differently "
             "on the shortest game that exposes it.",
-            f"```javascript\n{engine_js}\n```",
+            f"```{self.language.fence}\n{engine_js}\n```",
             f"COUNTEREXAMPLE ({ce.get('source')}): players={ce.get('players')}, "
             f"deck={json.dumps((ce.get('script') or {}).get('deck'))}\nactions played: "
             f"{json.dumps(ce.get('actions'))}\nWhat the ORIGINAL did (ground truth):\n{trace}\n"
@@ -208,19 +208,25 @@ class Rebuilder:
             + (f"\nYour rebuild's error message: {ce['candidate_error']}" if ce.get("candidate_error") else ""),
             "For reference, the confirmed rules (Python):\n" + "\n\n".join(
                 f"[{r['group']}] {r['text']}\n{r['code']}" for r in rules),
-            "Fix engine.js so it matches the original on this game without breaking the rules above. "
-            "Reply with the complete corrected engine.js in one ```javascript block and nothing else."])
+            f"Fix {self.language.engine_file} so it matches the original on this game without breaking the "
+            f"rules above. Reply with the complete corrected {self.language.engine_file} in one "
+            f"```{self.language.fence} block and nothing else."])
 
     # ---------- build / repair ----------
     def _finish(self, directory: Path, engine_js: str) -> RebuildResult:
-        write_rebuild(directory, engine_js)
-        result = RebuildResult(directory, engine_js)
-        error = node_check(directory / "engine.js")
+        if self.language is JAVASCRIPT:
+            write_rebuild(directory, engine_js)
+        else:
+            self.language.write(directory, engine_js)
+        result = RebuildResult(directory, engine_js, language=self.language)
+        error = node_check(directory / "engine.js") if self.language is JAVASCRIPT \
+            else self.language.check(directory)
         result.syntax_ok = error is None
         if error:
             result.problems.append(f"syntax: {error}")
             return result
-        result.unknown_behaviors = unknown_behaviors_of(directory)
+        result.unknown_behaviors = (unknown_behaviors_of(directory) if self.language is JAVASCRIPT
+                                    else self.language.unknown(directory))
         games = self.store.fitting().games()
         script = next((g for g in games if g.players == 2), games[0]).script["deck"]
         problem = smoke_game(result.command, script)
@@ -233,13 +239,13 @@ class Rebuilder:
         if not rules:
             raise RebuildError("no Confirmed rules: nothing to build from")
         text = self.muse.complete(self.build_prompt(rules), system=SYSTEM).text
-        return self._finish(directory, extract_js(text))
+        return self._finish(directory, self._extract(text))
 
     def repair(self, current: RebuildResult, counterexample: dict[str, Any],
                rules: list[dict[str, Any]]) -> RebuildResult:
         text = self.muse.complete(self.repair_prompt(current.engine_js, counterexample, rules),
                                   system=SYSTEM).text
-        return self._finish(current.directory, extract_js(text))
+        return self._finish(current.directory, self._extract(text))
 
 
 @dataclass
@@ -252,10 +258,13 @@ class LoopResult:
 
 def build_and_repair(rebuilder: Rebuilder, rules: list[dict[str, Any]], directory: Path,
                      verify: Callable[[list[str]], Any], *, max_attempts: int = 4,
-                     on_counterexample: Callable[[dict[str, Any]], None] | None = None) -> LoopResult:
+                     on_counterexample: Callable[[dict[str, Any]], None] | None = None,
+                     events: EventLog | None = None, language: str = "JavaScript") -> LoopResult:
     """Build, verify, and repair from counterexamples until Accepted or out of attempts."""
     history: list[dict[str, Any]] = []
     result = rebuilder.build(rules, directory)
+    safe_emit(events, "rebuild", {"language": language, "runnable": result.ready,
+                                 "unknown": len(result.unknown_behaviors)})
     for attempt in range(1, max_attempts + 1):
         entry: dict[str, Any] = {"attempt": attempt, "problems": result.problems,
                                  "unknown_behaviors": result.unknown_behaviors}
@@ -266,6 +275,11 @@ def build_and_repair(rebuilder: Rebuilder, rules: list[dict[str, Any]], director
                                   "reference": None, "candidate": result.problems}
         else:
             verdict = verify(result.command)
+            safe_emit(events, "verify", {
+                "verdict": verdict.verdict, "reason": str(verdict.reason).split(":")[0][:120],
+                "attempt": attempt,
+                "games": getattr(getattr(verdict, "fuzz", None), "games", 0),
+                "divergences": len(getattr(getattr(verdict, "replay", None), "divergences", []) or [])})
             entry["verdict"] = verdict.verdict
             entry["reason"] = verdict.reason
             if verdict.verdict == "Accepted":
@@ -276,5 +290,8 @@ def build_and_repair(rebuilder: Rebuilder, rules: list[dict[str, Any]], director
                 on_counterexample(ce)
         if attempt == max_attempts:
             break
+        safe_emit(events, "repair", {"attempt": attempt + 1, "kind": ce.get("kind")})
         result = rebuilder.repair(result, ce, rules)
+        safe_emit(events, "rebuild", {"language": language, "runnable": result.ready,
+                                     "unknown": len(result.unknown_behaviors)})
     return LoopResult(False, max_attempts, result, history)

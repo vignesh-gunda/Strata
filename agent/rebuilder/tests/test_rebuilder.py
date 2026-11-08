@@ -209,3 +209,91 @@ def test_unknown_behaviors_are_reported_in_the_history(tmp_path):
     outcome = build_and_repair(rebuilder, RULES, tmp_path / "rb", verify_against_toy, max_attempts=3)
     assert outcome.history[0]["unknown_behaviors"] == ["what vent does at pressure 3"]
     assert outcome.accepted
+
+
+# ---------- T14.3: target languages ----------
+import shutil as _shutil
+
+from rebuilder.main.languages import (GO, JAVASCRIPT, LANGUAGES, LanguageError, ToolchainMissing,
+                                      UnsupportedLanguage, resolve)
+
+needs_go = pytest.mark.skipif(_shutil.which("go") is None, reason="Go toolchain not installed")
+TOY_GO = (HERE / "fixtures" / "toy_engine.go").read_text()
+GO_BUG = TOY_GO.replace('const TOY_MODE = "good"', 'const TOY_MODE = "bug"')
+GO_UNKNOWN = TOY_GO.replace('const TOY_MODE = "good"', 'const TOY_MODE = "unknown"')
+
+
+def go_fenced(code):
+    return "Here you go:\n```go\n" + code + "\n```\n"
+
+
+def go_world(*replies):
+    rebuilder, store, transport = world(*replies)
+    rebuilder.language = GO
+    return rebuilder, store, transport
+
+
+@pytest.mark.parametrize("typed,key", [("Go", "go"), ("golang", "go"), (" GOLANG ", "go"), ("js", "js"),
+                                       ("JavaScript", "js"), ("node.js", "js"), (None, "js"), ("", "js")])
+def test_language_names_resolve(typed, key):
+    assert resolve(typed).key == key
+
+
+def test_unsupported_language_is_named_plainly_and_not_swapped():
+    with pytest.raises(UnsupportedLanguage, match="JavaScript, Go so far, not Rust"):
+        resolve("Rust")
+
+
+def test_missing_toolchain_is_reported_not_replaced():
+    with pytest.raises(ToolchainMissing) as error:
+        GO.require_toolchain(which=lambda tool: None)
+    message = str(error.value)
+    assert "can't rebuild in Go" in message and "go is not installed" in message
+    assert "did not switch to another language" in message
+    JAVASCRIPT.require_toolchain(which=lambda tool: "/usr/bin/" + tool)         # present: no error
+
+
+def test_every_language_config_is_complete():
+    for key, lang in LANGUAGES.items():
+        assert lang.key == key and lang.name and lang.toolchain and lang.file_layout
+        assert lang.build(Path("/x"))[0] and lang.command(Path("/x"))[0]
+        assert lang.engine_file in lang.engine_api and lang.prompt_hints
+
+
+def test_go_reply_must_be_a_package_main_file():
+    assert GO.extract("```go\npackage main\nfunc A() {}\n```").startswith("package main")
+    with pytest.raises(LanguageError, match="package main"):
+        GO.extract("```go\npackage other\n```")
+
+
+def test_prompts_are_built_for_the_chosen_language():
+    rebuilder, _, _ = go_world()
+    prompt = rebuilder.build_prompt(RULES)
+    assert "func NewGame(players int" in prompt and "engine.go" in prompt and "```go" in prompt
+    assert "module.exports" not in prompt and "services/" not in prompt
+
+
+@needs_go
+def test_go_build_runs_the_contract_and_reports_unknowns(tmp_path):
+    rebuilder, _, _ = go_world(go_fenced(GO_UNKNOWN))
+    result = rebuilder.build(RULES, tmp_path / "go")
+    assert result.ready, result.problems
+    assert result.unknown_behaviors == ["what vent does at pressure 3"]
+    assert result.command == [str(tmp_path / "go" / "server")]
+    assert {p.name for p in (tmp_path / "go").iterdir()} >= {"engine.go", "server.go", "go.mod", "server"}
+
+
+@needs_go
+def test_go_syntax_errors_are_reported_and_repaired(tmp_path):
+    rebuilder, _, transport = go_world(go_fenced("package main\nfunc broken( {"), go_fenced(TOY_GO))
+    outcome = build_and_repair(rebuilder, RULES, tmp_path / "go", verify_against_toy, max_attempts=3)
+    assert outcome.accepted and outcome.history[0]["verdict"] == "not runnable"
+    assert "```go" in transport.prompts[1] and "func NewGame" in transport.prompts[1]
+
+
+@needs_go
+def test_go_rebuild_is_blocked_then_repaired_against_the_toy_original(tmp_path):
+    rebuilder, _, _ = go_world(go_fenced(GO_BUG), go_fenced(TOY_GO))
+    outcome = build_and_repair(rebuilder, RULES, tmp_path / "go", verify_against_toy, max_attempts=3,
+                               language="Go")
+    assert outcome.accepted and [h["verdict"] for h in outcome.history] == ["Blocked", "Accepted"]

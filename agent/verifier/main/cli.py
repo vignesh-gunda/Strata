@@ -26,7 +26,7 @@ def run_verification(fs: DigSiteFS, candidate_command: list[str], run_dir: Path,
                      fuzz_games: int, seed: int = 0):
     recorded = load_seed_corpus(fs) + load_games(run_dir / "probe_games.jsonl")
     extra = [(g.players, g.script) for g in recorded]            # real decks first
-    with BinaryProcess(fs) as ref, BinaryProcess(command=candidate_command, timeout=20) as cand:
+    with BinaryProcess(fs) as ref, BinaryProcess(command=candidate_command, timeout=10) as cand:
         return verify(ref, cand, recorded, fuzz_games=fuzz_games,
                       min_fuzz_games=DEFAULT_MIN_FUZZ, seed=seed, extra_scripts=extra)
 

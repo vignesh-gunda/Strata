@@ -19,3 +19,6 @@ services/pressure/sealed/runs/
 
 # Per-run agent output (ledger, probe list, traces)
 agent/runs/
+
+# Rebuilt code, one folder per run (agent/rebuilder/main/location.py)
+rebuild/
