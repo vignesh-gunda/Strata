@@ -90,7 +90,7 @@ def test_retries_429_and_5xx_then_succeeds_and_backs_off():
     t = FakeTransport((429, {}), (503, {}), (200, {"ok": 1}))
     status, payload = post_with_retry("u", "k", {}, transport=t, sleep=sleeps.append)
     assert (status, payload) == (200, {"ok": 1})
-    assert sleeps == [1.0, 2.0]
+    assert sleeps == [0.5, 1.0]                  # short backoff: a slow model must not stall the run
 
 
 def test_does_not_retry_400():
@@ -229,3 +229,66 @@ def test_subq_blocks_forbidden_state():
     with pytest.raises(firewall.PromptFirewallError):
         SubqClient("k", transport=t).noul({"file": "services/pressure/x.py"}, "q")
     assert t.requests == []
+
+
+def test_default_timeouts_are_short_and_reach_the_transport():
+    seen = []
+
+    def transport(url, headers, body, timeout):
+        seen.append(timeout)
+        return 200, {"output": [], "usage": {}, "answers": {"q": {"noul": 0.5}}}
+    from llm.main.muse import MuseClient
+    from llm.main.subq import SubqClient
+    MuseClient("k", transport=transport, sleep=lambda s: None).complete("hi")
+    MuseClient("k", transport=transport, sleep=lambda s: None, timeout=120.0).complete("hi")
+    SubqClient("k", transport=transport, sleep=lambda s: None).noul({"a": 1}, "?")
+    assert seen == [60.0, 120.0, 30.0]
+
+
+def test_a_hung_call_gives_up_after_three_tries():
+    t = FakeTransport((503, {}), (503, {}), (503, {}), (503, {}))
+    status, _ = post_with_retry("u", "k", {}, transport=t, sleep=lambda s: None)
+    assert status == 503 and len(t.requests) == 3
+
+
+# ---------- Muse reasoning effort (faster answers) ----------
+
+def test_muse_sends_no_reasoning_setting_unless_asked(monkeypatch):
+    monkeypatch.delenv("STRATA_MUSE_EFFORT", raising=False)
+    t = FakeTransport(muse_ok())
+    MuseClient("k", transport=t, sleep=no_sleep).complete("hi")
+    assert "reasoning" not in t.requests[0]["body"]
+
+
+def test_muse_effort_is_sent_as_reasoning_effort():
+    t = FakeTransport(muse_ok(), muse_ok())
+    client = MuseClient("k", transport=t, sleep=no_sleep, effort="low")
+    client.complete("hi")
+    client.complete("again", effort="minimal")                 # a single call can ask for less
+    assert t.requests[0]["body"]["reasoning"] == {"effort": "low"}
+    assert t.requests[1]["body"]["reasoning"] == {"effort": "minimal"}
+
+
+def test_muse_effort_can_come_from_the_environment(monkeypatch):
+    monkeypatch.setenv("STRATA_MUSE_EFFORT", "medium")
+    t = FakeTransport(muse_ok())
+    MuseClient("k", transport=t, sleep=no_sleep).complete("hi")
+    assert t.requests[0]["body"]["reasoning"] == {"effort": "medium"}
+
+
+def test_muse_cannot_turn_reasoning_off_or_use_a_made_up_level():
+    with pytest.raises(ValueError, match="cannot turn reasoning off"):
+        MuseClient("k", effort="none")
+    with pytest.raises(ValueError, match="must be one of"):
+        MuseClient("k", effort="turbo")
+
+
+def test_complete_json_passes_the_effort_through():
+    from pydantic import BaseModel
+
+    class Out(BaseModel):
+        ok: bool
+
+    t = FakeTransport(muse_ok('{"ok": true}'))
+    MuseClient("k", transport=t, sleep=no_sleep).complete_json("hi", Out, effort="low")
+    assert t.requests[0]["body"]["reasoning"] == {"effort": "low"}

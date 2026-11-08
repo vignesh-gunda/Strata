@@ -26,7 +26,7 @@ class RuleTimeout(RuleError):
 
 
 class RuleWorker:
-    def __init__(self, *, timeout: float = 30.0, cpu_seconds: int = 60):
+    def __init__(self, *, timeout: float = 10.0, cpu_seconds: int = 20):
         self._proc = BinaryProcess(
             command=[sys.executable, "-I", _WORKER, str(cpu_seconds)], timeout=timeout)
         self.meta: dict[str, Any] | None = None

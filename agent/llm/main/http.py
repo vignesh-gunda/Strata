@@ -41,9 +41,9 @@ def post_with_retry(
     *,
     transport: Transport = urllib_transport,
     sleep: Callable[[float], None] = time.sleep,
-    retries: int = 3,
-    backoff: float = 1.0,
-    timeout: float = 120.0,
+    retries: int = 2,
+    backoff: float = 0.5,
+    timeout: float = 60.0,
 ) -> tuple[int, dict[str, Any]]:
     """POST with a bearer key. Returns the last (status, payload)."""
     headers = {"Authorization": f"Bearer {key}"}

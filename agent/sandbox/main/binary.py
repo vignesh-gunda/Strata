@@ -46,7 +46,7 @@ class BinaryProcess:
         fs: DigSiteFS | None = None,
         *,
         python: str | None = None,
-        timeout: float = 10.0,
+        timeout: float = 5.0,
         command: list[str] | None = None,  # test hook: run any JSON-lines program
     ):
         if command is None and fs is None:

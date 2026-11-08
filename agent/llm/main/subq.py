@@ -69,7 +69,9 @@ class SubqClient:
         model: str = MODEL,
         transport: Transport = urllib_transport,
         sleep: Callable[[float], None] = time.sleep,
+        timeout: float = 30.0,
     ):
+        self.timeout = timeout          # seconds per HTTP attempt
         if api_key is None:
             load_env()
             api_key = require_key("SUBQ_API_KEY")
@@ -87,7 +89,7 @@ class SubqClient:
         status, payload = post_with_retry(
             f"{self.base_url}/systemone", self._key,
             {"model": self.model, "state": state, "questions": questions},
-            transport=self._transport, sleep=self._sleep,
+            transport=self._transport, sleep=self._sleep, timeout=self.timeout,
         )
         if status != 200:
             detail = payload.get("detail", {}) if isinstance(payload, dict) else {}
