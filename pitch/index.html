@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strata — pitch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;700;800&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0d0c0b; --line: #2a2621; --text: #f6f1e7; --muted: #b3aa9a; --faint: #6f685c;
+  --paper: #f5efe2; --ink: #1d1a16; --heat: #ff7a3d; --hot: #ff4a3a; --ok: #7fd18b; --cool: #79b8ff;
+  --felt: #1f3a2e; --felt-dark: #142820; --rim: #3a2a1c;
+  --sans: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif; --mono: "IBM Plex Mono", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); overflow: hidden; }
+.slide { position: absolute; inset: 0; padding: 8vh 7vw 10vh; display: grid; align-content: center; gap: 5vh;
+  opacity: 0; transform: translateY(20px); transition: opacity .5s ease, transform .5s ease; pointer-events: none; }
+.slide.active { opacity: 1; transform: none; pointer-events: auto; }
+.tag { font-family: var(--mono); font-size: 15px; letter-spacing: .18em; color: var(--heat); text-transform: uppercase; }
+h1, h2 { margin: 0; font-weight: 800; letter-spacing: -.035em; line-height: .95; }
+h1 { font-size: clamp(80px, 13vw, 220px); }
+h2 { font-size: clamp(48px, 6.4vw, 104px); }
+h2 em, h1 em { font-style: normal; color: var(--heat); }
+.sub { font-size: clamp(22px, 2vw, 32px); font-weight: 500; color: var(--muted); margin: 0; line-height: 1.3; }
+.split { display: grid; grid-template-columns: 1fr 1.25fr; gap: 5vw; align-items: center; }
+.row { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4vw; align-items: end; }
+.big { font-size: clamp(72px, 8vw, 140px); font-weight: 800; letter-spacing: -.04em; line-height: .9; }
+.cap { font-size: 22px; font-weight: 500; color: var(--muted); margin-top: 14px; line-height: 1.3; }
+.src { font-family: var(--mono); font-size: 12px; color: var(--faint); margin-top: 10px; }
+
+/* 100-square grid */
+.grid100 { display: grid; grid-template-columns: repeat(10, 1fr); gap: 5px; width: min(300px, 22vw); }
+.grid100 i { aspect-ratio: 1; background: #2b2722; border-radius: 3px; transition: background .4s; }
+.active .grid100 i.gone { background: var(--hot); }
+/* bars */
+.bars { display: grid; gap: 22px; width: 100%; }
+.bar-row { display: grid; grid-template-columns: 170px 1fr 80px; gap: 18px; align-items: center; font-size: 24px; font-weight: 700; }
+.track { height: 34px; background: #221f1b; border-radius: 6px; overflow: hidden; }
+.fill { height: 100%; width: 0; border-radius: 6px; transition: width 1.4s cubic-bezier(.2,.7,.2,1) .3s; }
+.active .fill.a { width: 99%; background: var(--muted); }
+.active .fill.b { width: 40%; background: var(--hot); }
+.dots { display: flex; gap: 18px; }
+.dots i { width: 64px; height: 64px; border-radius: 50%; background: #2b2722; display: grid; place-items: center; font-style: normal; font-size: 34px; font-weight: 800; }
+.active .dots i.bad { background: var(--hot); color: var(--bg); animation: pop .5s ease .9s both; }
+@keyframes pop { from { transform: scale(.4); } }
+
+/* table */
+.table { position: relative; width: 100%; aspect-ratio: 1.6; border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 40%, #2b4c3c 0%, var(--felt) 45%, var(--felt-dark) 100%);
+  box-shadow: 0 0 0 12px var(--rim), 0 0 0 13px #4d3925, 0 40px 90px rgba(0,0,0,.75), inset 0 0 100px rgba(0,0,0,.55); }
+.gauge { position: absolute; left: 50%; top: 50%; width: 24%; aspect-ratio: 1; transform: translate(-50%,-50%); }
+.gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.gauge circle { fill: none; stroke-width: 9; }
+.gauge .trk { stroke: rgba(246,241,231,.14); fill: rgba(0,0,0,.25); }
+.gauge .val { stroke: var(--heat); stroke-linecap: round; stroke-dasharray: 289; stroke-dashoffset: 289; }
+.active .gauge .val { animation: heat 5s ease-in-out infinite; }
+@keyframes heat { 0% { stroke-dashoffset: 289; stroke: var(--paper); } 60% { stroke: var(--heat); } 85% { stroke-dashoffset: 40; stroke: var(--hot); } 100% { stroke-dashoffset: 289; } }
+.gauge b { position: absolute; inset: 0; display: grid; place-items: center; font-size: clamp(40px, 4vw, 72px); font-weight: 800; }
+.seat { position: absolute; transform: translate(-50%,-50%); display: grid; justify-items: center; gap: 6px; }
+.seat img { width: clamp(56px, 5vw, 84px); aspect-ratio: 1; border-radius: 50%; background: var(--paper); box-shadow: 0 0 0 4px var(--bg), 0 0 0 6px #3a352e; }
+.seat.now img { box-shadow: 0 0 0 4px var(--bg), 0 0 0 7px var(--heat), 0 0 36px rgba(255,122,61,.55); }
+.seat span { font-weight: 700; font-size: 18px; }
+.hand { display: flex; }
+.card { width: clamp(38px, 3.3vw, 56px); aspect-ratio: .72; background: var(--paper); border-radius: 6px; display: grid; place-items: center; position: relative;
+  box-shadow: 0 8px 16px rgba(0,0,0,.4); margin: 0 1px; }
+.card img { width: 70%; }
+.card i { position: absolute; left: 5px; top: 3px; font-style: normal; font-weight: 800; font-size: 13px; color: var(--ink); }
+.hand .card:nth-child(odd) { transform: rotate(-6deg); } .hand .card:nth-child(even) { transform: rotate(5deg) translateY(3px); }
+.pile { position: absolute; top: 50%; transform: translate(-50%,-50%); }
+.back { width: clamp(50px, 4.4vw, 74px); aspect-ratio: .72; border-radius: 7px; background: linear-gradient(#8a2f25,#5e1f19);
+  box-shadow: inset 0 0 0 4px var(--paper), 0 8px 16px rgba(0,0,0,.45); display: grid; place-items: center; color: var(--paper); font-weight: 800; font-size: 24px; }
+.fly { position: absolute; z-index: 3; }
+.active .fly { animation: fly 3.2s cubic-bezier(.2,.7,.2,1) infinite; }
+@keyframes fly { 0% { left: 50%; top: 72%; opacity: 0; transform: rotate(-20deg) scale(.8); } 12% { opacity: 1; }
+  55% { left: 76%; top: 46%; transform: rotate(6deg) scale(1.15); opacity: 1; } 80%, 100% { left: 76%; top: 46%; opacity: 0; } }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; }
+.legend span { display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 8px; background: #191714; border-radius: 999px; font-weight: 700; font-size: 18px; }
+.legend .card { width: 30px; box-shadow: none; } .legend .card i { display: none; }
+
+/* pipeline */
+.flow { position: relative; display: grid; grid-template-columns: repeat(6, 1fr); align-items: start; }
+.flow::before { content: ""; position: absolute; left: 8%; right: 8%; top: 54px; height: 3px; background: var(--line); }
+.flow .pulse { position: absolute; top: 47px; left: 8%; width: 17px; height: 17px; border-radius: 50%; background: var(--heat); box-shadow: 0 0 24px var(--heat); }
+.active .flow .pulse { animation: travel 4s ease-in-out infinite; }
+@keyframes travel { from { left: 8%; } to { left: calc(92% - 17px); } }
+.node { display: grid; justify-items: center; gap: 14px; text-align: center; position: relative; }
+.node .o { width: 108px; height: 108px; border-radius: 50%; background: #191714; border: 3px solid var(--line); display: grid; place-items: center; font-size: 44px; }
+.node .o img { width: 58%; }
+.node b { font-size: 28px; font-weight: 800; }
+.node small { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.node.end .o { border-color: var(--ok); color: var(--ok); }
+
+/* strata */
+.rock { display: grid; border-radius: 14px; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+.band { display: grid; grid-template-columns: 220px 1fr; align-items: center; gap: 24px; padding: 20px 28px; position: relative; }
+.band .l { font-weight: 800; font-size: 22px; letter-spacing: .02em; }
+.band .ex { display: flex; gap: 10px; flex-wrap: wrap; }
+.band .ex span { background: rgba(0,0,0,.28); padding: 8px 14px; border-radius: 999px; font-weight: 700; font-size: 18px; }
+.b1 { background: linear-gradient(90deg, #ff7a3d, #e5612a); color: #1a0c05; }
+.b1 .ex span { background: rgba(255,255,255,.25); }
+.b2 { background: #6b4a33; } .b3 { background: #4a3a2c; } .b4 { background: #2f2821; }
+.b4 .ex span s { color: var(--hot); }
+.b5 { background: #191613; font-family: var(--mono); }
+.b5 .ex span { font-family: var(--mono); font-weight: 500; font-size: 14px; color: var(--muted); }
+.grain { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); top: -10px; opacity: 0; }
+.active .grain { animation: fall 2.4s linear infinite; }
+@keyframes fall { 0% { top: -10px; opacity: 0; } 20% { opacity: .9; } 100% { top: 100%; opacity: 0; } }
+
+/* proof */
+.vs { display: grid; grid-template-columns: 1fr 70px 1fr; gap: 0; align-items: stretch; }
+.term { background: #12100e; border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; font-family: var(--mono); font-size: 15px; height: 300px; overflow: hidden; }
+.term h4 { margin: 0 0 12px; font-family: var(--sans); font-size: 20px; font-weight: 800; color: var(--text); }
+.term div { color: var(--muted); padding: 3px 0; white-space: nowrap; }
+.eq { display: grid; align-content: center; justify-items: center; font-size: 46px; font-weight: 800; color: var(--ok); }
+.stamp { display: inline-flex; align-items: center; gap: 18px; }
+.stamp b { font-size: clamp(40px, 4vw, 64px); font-weight: 800; color: var(--bg); background: var(--ok); padding: 8px 22px; border-radius: 10px; transform: rotate(-3deg); }
+.active .stamp b { animation: slam .5s cubic-bezier(.3,1.6,.5,1) 1.2s both; }
+@keyframes slam { from { transform: rotate(-3deg) scale(2.2); opacity: 0; } }
+.stamp span { font-size: 26px; font-weight: 700; color: var(--muted); }
+.todo { border: 2px dashed var(--faint); padding: 2px 10px; border-radius: 6px; color: var(--faint); }
+
+/* tech */
+.tech { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+.tech div { background: #171512; border-radius: 16px; padding: 28px 24px 30px; display: grid; gap: 14px; border-top: 5px solid var(--c); }
+.tech b { font-size: clamp(36px, 3.4vw, 56px); font-weight: 800; letter-spacing: -.03em; }
+.tech span { font-family: var(--mono); font-size: 14px; color: var(--muted); }
+
+/* live frame */
+.frame { border-radius: 14px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(0,0,0,.6); background: #12100e; height: 62vh; display: grid; grid-template-rows: 36px 1fr; }
+.frame .chrome { display: flex; align-items: center; gap: 8px; padding: 0 14px; background: #1b1916; }
+.frame .chrome i { width: 11px; height: 11px; border-radius: 50%; background: #3a352e; }
+.frame .chrome span { margin-left: 12px; font-family: var(--mono); font-size: 12px; color: var(--faint); }
+.frame iframe { width: 100%; height: 100%; border: 0; background: var(--bg); }
+
+/* chrome */
+.progress { position: fixed; left: 0; bottom: 0; height: 4px; background: var(--heat); transition: width .5s ease; }
+.hud { position: fixed; right: 26px; bottom: 18px; font-family: var(--mono); font-size: 13px; color: var(--faint); }
+.logo { position: fixed; left: 7vw; top: 4vh; font-weight: 800; font-size: 22px; letter-spacing: -.02em; }
+.logo i { font-style: normal; color: var(--heat); }
+.notes { position: fixed; left: 0; right: 0; bottom: 0; max-height: 32vh; overflow: auto; padding: 18px 7vw 30px; background: #161411f2;
+  border-top: 1px solid var(--line); font-size: 20px; font-weight: 500; line-height: 1.5; display: none; z-index: 10; }
+.notes.show { display: block; }
+.slide aside { display: none; }
+</style>
+</head>
+<body>
+<div class="logo">strata<i>.</i></div>
+
+<!-- 1 · title -->
+<section class="slide">
+  <div class="split">
+    <div style="display:grid;gap:4vh">
+      <h1>Strata<em>.</em></h1>
+      <p class="sub">Rebuilds software it can't read.<br>Proves it behaves the same.</p>
+    </div>
+    <div class="table" aria-hidden="true">
+      <div class="gauge"><svg viewBox="0 0 100 100"><circle class="trk" cx="50" cy="50" r="46"/><circle class="val" cx="50" cy="50" r="46"/></svg><b>9</b></div>
+      <div class="pile" style="left:24%"><div class="back">S</div></div>
+      <div class="pile" style="left:76%"><div class="card"><i>3</i><img src="../ui/static/assets/cards/2699.svg" alt=""></div></div>
+      <div class="fly"><div class="card"><i>V</i><img src="../ui/static/assets/cards/1F4A8.svg" alt=""></div></div>
+      <div class="seat now" style="left:50%;top:84%"><div class="hand"><div class="card"><i>J</i><img src="../ui/static/assets/cards/1F512.svg" alt=""></div><div class="card"><i>×2</i><img src="../ui/static/assets/cards/23E9.svg" alt=""></div><div class="card"><i>2</i><img src="../ui/static/assets/cards/2699.svg" alt=""></div></div><img src="../ui/static/assets/faces/player-1.svg" alt=""></div>
+      <div class="seat" style="left:50%;top:15%"><img src="../ui/static/assets/faces/player-2.svg" alt=""><div class="hand"><div class="card"><i>R</i><img src="../ui/static/assets/cards/1F504.svg" alt=""></div><div class="card"><i>S</i><img src="../ui/static/assets/cards/1F50D.svg" alt=""></div></div></div>
+    </div>
+  </div>
+  <aside>Hi, we're Strata. We built an AI archaeologist: it studies a program it is not allowed to read, only by running it, rebuilds it in another language, and proves the rebuild behaves the same.</aside>
+</section>
+
+<!-- 2 · problem -->
+<section class="slide">
+  <div class="tag">The problem</div>
+  <h2>Software <em>outlives</em> its code.</h2>
+  <div class="row" style="align-items:center">
+    <div style="display:flex;gap:28px;align-items:center">
+      <div class="grid100" id="grid100"></div>
+      <div><div class="big">87%</div><div class="cap">of classic games<br>can't be bought anymore</div><div class="src">Video Game History Foundation, 2023</div></div>
+    </div>
+    <div><div class="big">Bricked</div><div class="cap">devices die with<br>their company</div><div class="src">“You Bought It, They Bricked It”, 2026</div></div>
+  </div>
+  <aside>Programs outlive the code and the people behind them: old games, devices whose company died, legacy systems. Often the only evidence left is how the program behaves.</aside>
+</section>
+
+<!-- 3 · llms guess -->
+<section class="slide">
+  <div class="tag">Why not just ask an LLM?</div>
+  <h2>LLMs <em>guess</em>.</h2>
+  <div class="row" style="align-items:center">
+    <div class="bars">
+      <div class="bar-row"><span>Compiles</span><div class="track"><div class="fill a"></div></div><span>99%</span></div>
+      <div class="bar-row"><span>Works</span><div class="track"><div class="fill b"></div></div><span style="color:var(--hot)">~40%</span></div>
+      <div class="src">Decompiled code · Agent4Decompile, 2026</div>
+    </div>
+    <div>
+      <div class="dots"><i></i><i></i><i></i><i></i><i class="bad">×</i></div>
+      <div class="cap">1 in 5 “solved” patches is wrong</div><div class="src">SWE-ABS, 2026</div>
+    </div>
+  </div>
+  <aside>Ask a model to port software and you get code that looks right. Decompiled code compiles 99% of the time but only behaves correctly about 40%. One in five "solved" benchmark patches is actually wrong. We need evidence, not guesses.</aside>
+</section>
+
+<!-- 4 · the black box -->
+<section class="slide">
+  <div class="split">
+    <div style="display:grid;gap:4vh">
+      <div class="tag">The black box</div>
+      <h2>A game it has <em>never seen.</em></h2>
+      <div class="legend">
+        <span><span class="card"><img src="../ui/static/assets/cards/2699.svg" alt=""></span>Gear</span>
+        <span><span class="card"><img src="../ui/static/assets/cards/1F4A8.svg" alt=""></span>Vent</span>
+        <span><span class="card"><img src="../ui/static/assets/cards/1F504.svg" alt=""></span>Reverse</span>
+        <span><span class="card"><img src="../ui/static/assets/cards/23E9.svg" alt=""></span>Double</span>
+        <span><span class="card"><img src="../ui/static/assets/cards/1F512.svg" alt=""></span>Jam</span>
+        <span><span class="card"><img src="../ui/static/assets/cards/1F50D.svg" alt=""></span>Scan</span>
+      </div>
+      <p class="sub">+ secret rule changes every run.</p>
+    </div>
+    <div class="table" aria-hidden="true">
+      <div class="gauge"><svg viewBox="0 0 100 100"><circle class="trk" cx="50" cy="50" r="46"/><circle class="val" cx="50" cy="50" r="46"/></svg><b>11</b></div>
+      <div class="pile" style="left:24%"><div class="back">S</div></div>
+      <div class="pile" style="left:76%"><div class="card"><i>2</i><img src="../ui/static/assets/cards/2699.svg" alt=""></div></div>
+      <div class="fly"><div class="card"><i>3</i><img src="../ui/static/assets/cards/2699.svg" alt=""></div></div>
+      <div class="seat now" style="left:50%;top:84%"><div class="hand"><div class="card"><i>V</i><img src="../ui/static/assets/cards/1F4A8.svg" alt=""></div><div class="card"><i>S</i><img src="../ui/static/assets/cards/1F50D.svg" alt=""></div></div><img src="../ui/static/assets/faces/player-3.svg" alt=""></div>
+      <div class="seat" style="left:50%;top:15%"><img src="../ui/static/assets/faces/player-4.svg" alt=""><div class="hand"><div class="card"><i>J</i><img src="../ui/static/assets/cards/1F512.svg" alt=""></div><div class="card"><i>R</i><img src="../ui/static/assets/cards/1F504.svg" alt=""></div><div class="card"><i>1</i><img src="../ui/static/assets/cards/2699.svg" alt=""></div></div></div>
+    </div>
+  </div>
+  <aside>Our black box is an original card game: push a shared pressure meter, don't be the one who overloads it. The AI never sees the code, and every run we secretly change some rules, so reciting any known game fails. What it learns has to come from evidence.</aside>
+</section>
+
+<!-- 5 · pipeline -->
+<section class="slide">
+  <div class="tag">How it works</div>
+  <h2>Dig. Guess. Test. <em>Prove.</em></h2>
+  <div class="flow">
+    <span class="pulse"></span>
+    <div class="node"><div class="o">📖</div><b>Survey</b><small>reads the manual</small></div>
+    <div class="node"><div class="o">🔎</div><b>Check</b><small>vs recorded games</small></div>
+    <div class="node"><div class="o"><img src="../ui/static/assets/cards/2699.svg" alt=""></div><b>Probe</b><small>runs experiments</small></div>
+    <div class="node"><div class="o">💡</div><b>Guess</b><small>rules as code</small></div>
+    <div class="node"><div class="o">⟨/⟩</div><b>Rebuild</b><small>in JavaScript</small></div>
+    <div class="node end"><div class="o">✓</div><b>Verify</b><small>accept / block</small></div>
+  </div>
+  <aside>Six stages: survey the manual, check its claims against recorded games, run new experiments on the live binary, turn evidence into rules, rebuild in JavaScript, and an independent verifier with no AI in it accepts or blocks the rebuild.</aside>
+</section>
+
+<!-- 6 · strata -->
+<section class="slide">
+  <div class="tag">The evidence ledger</div>
+  <h2>Models propose. <em>Code decides.</em></h2>
+  <div class="rock">
+    <div class="band b1"><span class="l">PROVEN</span><span class="ex"><span>Vent cools by 4</span></span></div>
+    <div class="band b2"><span class="l">GUESS</span><span class="ex"><span>Jam cancels the next card</span></span></div>
+    <div class="band b3"><span class="l">SEEN</span><span class="ex"><span>Gear 3 → +3</span><span>Double → 2 moves</span><span>out at 12</span></span></div>
+    <div class="band b4"><span class="l">MANUAL</span><span class="ex"><span><s>Vent cools by 3</s> ✗</span></span></div>
+    <div class="band b5"><span class="l">TRACES</span><span class="ex"><span>22,736 recorded steps</span></span>
+      <i class="grain" style="left:30%"></i><i class="grain" style="left:52%;animation-delay:.8s"></i><i class="grain" style="left:71%;animation-delay:1.5s"></i></div>
+  </div>
+  <aside>Evidence piles up like rock layers. Raw traces at the bottom, then what was seen, then guesses, then proven rules. A model can suggest, only code can mark a rule proven. Here the manual said Vent cools by 3, the evidence said 4: a planted change, caught.</aside>
+</section>
+
+<!-- 7 · proof -->
+<section class="slide">
+  <div class="tag">Proof, not vibes</div>
+  <div class="vs">
+    <div class="term"><h4>Original · Python</h4><div id="left"></div></div>
+    <div class="eq">=</div>
+    <div class="term"><h4>Rebuild · JavaScript</h4><div id="right"></div></div>
+  </div>
+  <div class="stamp"><b>ACCEPTED</b><span><span class="todo">N</span> games · 0 divergences</span></div>
+  <aside>Proof is mechanical: replay every recorded game on both versions, fuzz thousands more with the same scripted deck, and shrink any difference to the shortest failing game. The verifier says accepted or blocked. Replace N with our real verifier number.</aside>
+</section>
+
+<!-- 8 · tech -->
+<section class="slide">
+  <div class="tag">Built with</div>
+  <h2>Two models. <em>Neither decides.</em></h2>
+  <div class="tech">
+    <div style="--c:#5b8def"><b>Writes</b><span>Meta Muse Spark</span></div>
+    <div style="--c:#ff7a3d"><b>Chooses</b><span>SubQ Snap · 384K context</span></div>
+    <div style="--c:#b48cff"><b>Talks</b><span>Fetch.ai · ASI:One</span></div>
+    <div style="--c:#7fd18b"><b>Decides</b><span>plain code · sandboxed</span></div>
+  </div>
+  <aside>Muse writes hypotheses and the rebuild. SubQ makes long-context decisions over all the evidence, like which experiment to run next. Fetch.ai agents let you talk to it in ASI:One. Deterministic code makes every final decision, and AI-written code runs sandboxed with no keys.</aside>
+</section>
+
+<!-- 9 · live -->
+<section class="slide">
+  <div class="tag">Live</div>
+  <div class="frame"><div class="chrome"><i></i><i></i><i></i><span>localhost:8765 · strata live view</span></div>
+    <iframe title="Strata live view" data-src="http://localhost:8765/"></iframe></div>
+  <aside>This is the real app. Press Start: cards fly, pressure rises, players get knocked out. Switch to Behind the scenes: what it saw, guessed and proved. Point at "Vent lowers pressure by 4".</aside>
+</section>
+
+<!-- 10 · close -->
+<section class="slide">
+  <h1 style="font-size:clamp(64px,8.5vw,150px)">Rebuilt.<br><em>With proof.</em></h1>
+  <p class="sub">For every program that outlived its creator.</p>
+  <aside>The same loop works for abandoned tools, protocols of bricked devices and legacy code. Strata: rebuilt, with proof. Thank you.</aside>
+</section>
+
+<div class="notes" id="notes"></div>
+<div class="progress" id="progress"></div>
+<div class="hud" id="hud"></div>
+<script>
+const slides = [...document.querySelectorAll(".slide")];
+const notes = document.getElementById("notes");
+const grid = document.getElementById("grid100");
+grid.append(...Array.from({ length: 100 }, (_, i) => { const cell = document.createElement("i"); if (i < 87) cell.className = "gone"; cell.style.transitionDelay = `${i * 12}ms`; return cell; }));
+
+const LINES = ["s0 play gear3  p=3", "s1 play vent   p=0", "s0 draw        +1 card", "s1 play double →2 moves", "s0 play jam    —", "s1 play gear2  —", "s0 play scan   saw 2", "s1 play gear1  p=1", "s0 play gear3  p=4", "s1 draw        +1 card"];
+let ticker = null;
+function runTerminals(on) {
+  clearInterval(ticker);
+  const left = document.getElementById("left"); const right = document.getElementById("right");
+  left.replaceChildren(); right.replaceChildren();
+  if (!on) return;
+  let n = 0;
+  ticker = setInterval(() => {
+    [left, right].forEach((term) => {
+      const line = document.createElement("div");
+      line.textContent = `✓ ${String(n + 1).padStart(4, "0")}  ${LINES[n % LINES.length]}`;
+      term.append(line);
+      while (term.children.length > 10) term.firstChild.remove();
+    });
+    n += 1;
+  }, 260);
+}
+
+let index = Math.max(0, Math.min(slides.length - 1, Number.parseInt(location.hash.slice(1) || "1", 10) - 1));
+function show(next) {
+  index = Math.max(0, Math.min(slides.length - 1, next));
+  slides.forEach((slide, i) => slide.classList.toggle("active", i === index));
+  document.getElementById("hud").textContent = `${index + 1} / ${slides.length}`;
+  document.getElementById("progress").style.width = `${((index + 1) / slides.length) * 100}%`;
+  notes.textContent = slides[index].querySelector("aside")?.textContent.trim() || "";
+  runTerminals(slides[index].contains(document.getElementById("left")));
+  const frame = slides[index].querySelector("iframe[data-src]");
+  if (frame && !frame.src) frame.src = frame.dataset.src;
+  history.replaceState(null, "", `#${index + 1}`);
+}
+document.addEventListener("keydown", (event) => {
+  if (["ArrowRight", "PageDown", " "].includes(event.key)) { event.preventDefault(); show(index + 1); }
+  if (["ArrowLeft", "PageUp"].includes(event.key)) { event.preventDefault(); show(index - 1); }
+  if (event.key.toLowerCase() === "n") notes.classList.toggle("show");
+  if (event.key.toLowerCase() === "f") (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {});
+});
+document.addEventListener("click", (event) => { if (!event.target.closest("iframe")) show(index + (event.clientX > innerWidth / 3 ? 1 : -1)); });
+show(index);
+</script>
+</body>
+</html>

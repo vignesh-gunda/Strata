@@ -18,7 +18,7 @@ It is the answer key for the final report. Agents get only the `dig-site/` folde
 - **double:** the next seat to take a turn gets 2 actions instead of 1.
 - **jam:** the next living seat in the current direction is jammed. A jammed seat's next card play is discarded with no effect, which clears the jam. Drawing is not affected.
 - **scan:** reveal the top 2 cards of the draw pile to the player.
-- **End:** the last living seat wins. If every living hand and the draw pile are empty, the game ends with no winner.
+- **End:** there is always a winner. The last living seat wins. If the game reaches turn 200, or nobody has any cards left, the living seat holding the fewest cards wins (the lower seat number breaks a tie).
 
 ## Deck (42 cards)
 

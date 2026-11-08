@@ -18,6 +18,9 @@ Events = tuple[Event, ...]
 Effect = Callable[[GameState, int, Card], tuple[GameState, Events]]
 
 
+SUDDEN_DEATH_TURN = 200  # a game that reaches this turn ends at once
+
+
 class IllegalActionError(ValueError):
     """The action is well formed but not allowed in the current state."""
 
@@ -45,7 +48,7 @@ def legal_actions(state: GameState) -> tuple[Action, ...]:
         return ()
     hand = state.hands[state.current]
     plays = tuple(Action(PLAY, card) for card in CARD_ORDER if card in hand)
-    can_draw = bool(state.draw_pile) and len(hand) < state.rules.hand_limit
+    can_draw = (bool(state.draw_pile) or len(state.discard) > 1) and len(hand) < state.rules.hand_limit
     actions = plays + ((Action(DRAW),) if can_draw else ())
     return actions or (Action(PASS),)
 
@@ -163,23 +166,30 @@ def _play(state: GameState, seat: int, card: Card) -> tuple[GameState, Events]:
 def _draw(state: GameState, seat: int) -> tuple[GameState, Events]:
     if state.jammed[seat] and state.rules.jam_blocks_draw:  # the draw silently does nothing
         return _set_jam(state, seat, False), ()
+    recycled: Events = ()
+    if not state.draw_pile:  # empty pile: the discard pile (all but its top card) becomes the new pile
+        state = replace(state, draw_pile=state.discard[:-1], discard=state.discard[-1:])
+        recycled = ({"type": "recycled", "count": len(state.draw_pile)},)
     card = state.draw_pile[0]
     after = replace(
         state,
         hands=_replace_at(state.hands, seat, state.hands[seat] + (card,)),
         draw_pile=state.draw_pile[1:],
     )
-    return after, ({"type": "drew", "seat": seat, "card": card.value},)
+    return after, recycled + ({"type": "drew", "seat": seat, "card": card.value},)
 
 
 def _is_stalemate(state: GameState) -> bool:
     living_hands = (hand for hand, alive in zip(state.hands, state.alive) if alive)
-    return not state.draw_pile and not any(living_hands)
+    no_cards_left = not state.draw_pile and len(state.discard) <= 1 and not any(living_hands)
+    return no_cards_left or state.turn >= SUDDEN_DEATH_TURN
 
 
 def _end_game(state: GameState, events: Events) -> tuple[GameState, Events]:
+    """There is always a winner: the last seat standing, or else the living seat
+    holding the fewest cards (lowest seat number breaks a tie)."""
     living = [seat for seat, alive in enumerate(state.alive) if alive]
-    winner = living[0] if len(living) == 1 else None
+    winner = min(living, key=lambda seat: (len(state.hands[seat]), seat))
     return replace(state, over=True, winner=winner), events + ({"type": "game_over", "winner": winner},)
 
 

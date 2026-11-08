@@ -105,10 +105,14 @@ def _opening(spec: GameSpec) -> tuple[dict, ...]:
 
 
 def play_game(box: BlackBoxClient, recorder: TraceRecorder, spec: GameSpec,
-              on_trace: Callable[[dict], None], delay: float = 0.0) -> dict:
+              on_trace: Callable[[dict], None], delay: float = 0.0,
+              on_start: Callable[[dict], None] | None = None) -> dict:
     script = _script_for(box, spec)
     game = box.new_game(spec.players, script)
     game_id, view = game["game_id"], game["view"]
+    if on_start is not None:
+        on_start({"game_id": game_id, "index": spec.index, "label": spec.label, "split": spec.split,
+                  "players": spec.players, "view": view})
     rng = random.Random(spec.script_seed)
     opening, broken, step = list(_opening(spec)), False, 0
     while step < MAX_STEPS:
