@@ -161,3 +161,37 @@ def test_rejects_bad_player_counts_and_short_decks():
         new_state(1, [Card.VENT] * 10)
     with pytest.raises(ValueError):
         new_state(3, [Card.VENT] * 5)
+
+
+def test_empty_pile_recycles_the_discard_pile():
+    state = replace(make([FILL, FILL], pile=[]), draw_pile=(), discard=(Card.GEAR1, Card.JAM, Card.SCAN))
+    assert DRAW in legal_actions(state)
+    after, events = step(state, DRAW)
+    assert types(events)[:2] == ["recycled", "drew"]
+    assert after.hands[0][-1] == Card.GEAR1  # oldest discard comes up first
+    assert after.discard == (Card.SCAN,) and after.draw_pile == (Card.JAM,)
+
+
+def test_sudden_death_still_names_a_winner():
+    from blackbox.engine import SUDDEN_DEATH_TURN
+
+    hands = [["vent", "vent", "vent", "vent"], ["vent", "vent", "vent", "vent"], ["vent", "vent", "vent", "vent"]]
+    state = replace(make(hands), turn=SUDDEN_DEATH_TURN, current=2)
+    state = replace(state, hands=(state.hands[0], state.hands[1][:1], state.hands[2]))
+    after, events = step(state, play("vent"))
+    assert after.over and after.winner == 1  # seat 1 holds the fewest cards
+    assert events[-1] == {"type": "game_over", "winner": 1}
+
+
+def test_every_game_has_a_winner():
+    import random
+
+    from blackbox.scripts import script_from_seed
+
+    for seed in range(400):
+        deck = [Card(name) for name in script_from_seed(seed)["deck"]]
+        state = new_state(2 + seed % 3, deck, [Mutation.HOT_RESTART] if seed % 2 else [])
+        rng = random.Random(seed)
+        while not state.over:
+            state, _ = step(state, rng.choice(legal_actions(state)))
+        assert isinstance(state.winner, int) and state.alive[state.winner]

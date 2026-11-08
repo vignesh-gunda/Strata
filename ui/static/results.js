@@ -23,7 +23,6 @@ function chunk(items, size) {
 }
 
 function face(winner) {
-  if (winner === null) return el("span", "result-face draw", "=");
   const holder = el("span", "result-face");
   holder.style.setProperty("--seat", SEAT_COLORS[winner % SEAT_COLORS.length]);
   holder.append(avatar(winner));
@@ -34,7 +33,7 @@ function gameRow(result) {
   const row = el("li", "result-row");
   const text = el("div", "result-text");
   text.append(
-    el("b", "", result.winner === null ? "Draw" : `${playerName(result.winner)} wins`),
+    el("b", "", `${playerName(result.winner)} wins`),
     el("span", "", `Game ${result.index + 1} · ${result.players} players · ${result.steps} moves · ${describeSetup(result.label)}`),
   );
   row.append(face(result.winner), text);
@@ -58,22 +57,13 @@ function roundCard(games, number, fresh) {
 }
 
 function tally(results) {
-  const wins = results.reduce((counts, { winner }) => {
-    const key = winner === null ? "draw" : String(winner);
-    return { ...counts, [key]: (counts[key] || 0) + 1 };
-  }, {});
-  const seats = Object.keys(wins).filter((key) => key !== "draw").map(Number).sort((a, b) => wins[b] - wins[a] || a - b);
-  const chips = seats.map((seat) => {
+  const wins = results.reduce((counts, { winner }) => ({ ...counts, [winner]: (counts[winner] || 0) + 1 }), {});
+  const seats = Object.keys(wins).map(Number).sort((a, b) => wins[b] - wins[a] || a - b);
+  return seats.map((seat) => {
     const chip = el("span", "tally-chip");
     chip.append(face(seat), el("b", "", String(wins[seat])), el("span", "", playerName(seat)));
     return chip;
   });
-  if (wins.draw) {
-    const chip = el("span", "tally-chip");
-    chip.append(face(null), el("b", "", String(wins.draw)), el("span", "", "Draws"));
-    chips.push(chip);
-  }
-  return chips;
 }
 
 export class Results {

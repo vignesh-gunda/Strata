@@ -16,6 +16,7 @@ export function describeStep(trace) {
   const parts = [];
 
   if (trace.action.type === "play") parts.push(`${who} plays ${cardName(trace.action.card)}.`);
+  if (find(trace, "recycled").length) parts.push("The deck ran out, so the discard pile becomes the new deck.");
   if (trace.action.type === "draw") parts.push(drew ? `${who} draws a card.` : `${who} tries to draw, but gets nothing.`);
   if (trace.action.type === "pass") parts.push(`${who} has nothing to do and passes.`);
 
@@ -27,6 +28,6 @@ export function describeStep(trace) {
   if (seen) parts.push(`They peek at the top ${seen.cards.length === 1 ? "card" : `${seen.cards.length} cards`} of the deck.`);
   const quiet = trace.action.type === "play" && !pressure.length && !seen;
   if (quiet) parts.push("Nothing visible happens.");
-  if (over) parts.push(over.winner === null ? "Game over: nobody can move, it's a draw." : `${playerName(over.winner)} wins the game!`);
+  if (over) parts.push(`${playerName(over.winner)} wins the game!`);
   return { text: parts.join(" "), quiet, knockout: out.length > 0 };
 }
