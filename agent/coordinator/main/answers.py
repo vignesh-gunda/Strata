@@ -102,28 +102,43 @@ def explain_claim(ledger: Ledger, text: str) -> str:
     return "\n".join(lines)
 
 
-def rebuild_summary(run_dir: Path) -> str:
-    folder = run_dir / "rebuild"
-    report_path = run_dir / "rebuild_report.json"
-    if not folder.exists() and not report_path.exists():
-        return "No rebuild yet. It is made after rules are proven."
-    lines = []
-    if report_path.exists():
-        try:
-            report = json.loads(report_path.read_text())
-        except ValueError:
-            report = {}
-        verdict = "accepted" if report.get("accepted") else "not accepted yet"
-        lines.append(f"Rebuild: {verdict} after {report.get('attempts', '?')} attempt(s).")
-        unknown = report.get("unknown_behaviors")
-        if unknown:
-            lines.append(f"{len(unknown)} behaviors still unknown: {', '.join(unknown[:5])}")
-        elif unknown is not None:
-            lines.append("No unknown behaviors left in the rebuild.")
-    files = sorted(p.name for p in folder.glob("*.js")) if folder.exists() else []
+def _one_rebuild(report: dict, folder: Path) -> list[str]:
+    language = report.get("language") or "JavaScript"
+    verdict = "accepted" if report.get("accepted") else "not accepted yet"
+    lines = [f"{language} rebuild: {verdict} after {report.get('attempts', '?')} attempt(s)."]
+    unknown = report.get("unknown_behaviors")
+    if unknown:
+        lines.append(f"{len(unknown)} behaviors still unknown: {', '.join(unknown[:5])}")
+    elif unknown is not None:
+        lines.append("No unknown behaviors left in the rebuild.")
+    program = folder / "program" if (folder / "program").is_dir() else folder
+    files = sorted(p.name for p in program.iterdir() if p.is_file()) if program.exists() else []
     if files:
-        lines.append(f"Files in {folder}: {', '.join(files)}")
-    return "\n".join(lines) or "A rebuild folder exists but has no report yet."
+        lines.append(f"Files in {program}: {', '.join(files)}")
+    return lines
+
+
+def rebuild_summary(run_dir: Path) -> str:
+    """One block per language that has been rebuilt: `<rebuild folder>/<language>/report.json`."""
+    from rebuilder.main.location import rebuild_dir
+    folder = rebuild_dir(run_dir)
+    lines: list[str] = []
+    for path in sorted(folder.glob("*/report.json")) if folder.exists() else []:
+        try:
+            lines += _one_rebuild(json.loads(path.read_text()), path.parent)
+        except ValueError:
+            lines.append(f"A rebuild report in {path.parent} could not be read.")
+    if lines:
+        return "\n".join(lines)
+    legacy = run_dir / "rebuild_report.json"        # runs made before rebuilds were stored per language
+    if legacy.exists():
+        try:
+            return "\n".join(_one_rebuild(json.loads(legacy.read_text()), folder))
+        except ValueError:
+            return "A rebuild report exists but could not be read."
+    if folder.exists():
+        return "A rebuild folder exists but has no report yet."
+    return "No rebuild yet. It is made after rules are proven."
 
 
 def report_summary(run_dir: Path, ledger: Ledger | None) -> str:

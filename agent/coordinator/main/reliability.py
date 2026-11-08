@@ -40,11 +40,12 @@ def _good_copy(run_dir: Path) -> Path:
     return run_dir / "ledger.good.jsonl"
 
 
-def load_ledger(run_dir: Path) -> LedgerView:
+def load_ledger(run_dir: Path, *, snapshot: bool = True) -> LedgerView:
     """Open the run's ledger. If it will not load, use the last good snapshot.
 
     A successful load refreshes the snapshot, so the fallback is never older than the
-    last time the ledger was readable.
+    last time the ledger was readable. Pass `snapshot=False` for frequent read-only
+    polling (the UI) so the read does not copy the file each time.
     """
     live = run_dir / "ledger.jsonl"
     good = _good_copy(run_dir)
@@ -59,9 +60,10 @@ def load_ledger(run_dir: Path) -> LedgerView:
                 except Exception:
                     pass
             return LedgerView(None, True, f"ledger unreadable ({type(exc).__name__}) and no good copy")
-        tmp = good.with_suffix(".tmp")
-        shutil.copyfile(live, tmp)
-        os.replace(tmp, good)
+        if snapshot:
+            tmp = good.with_suffix(".tmp")
+            shutil.copyfile(live, tmp)
+            os.replace(tmp, good)
         return LedgerView(ledger)
     if good.exists():
         return LedgerView(Ledger(good), True, "live ledger missing; showing the last good copy")
@@ -77,6 +79,7 @@ class RunState:
     finished: bool = False
     failed: str | None = None
     notes: dict[str, str] = field(default_factory=dict)
+    language: str = "js"          # target language of the rebuild stage (rebuilder.main.languages)
 
     @staticmethod
     def path(run_dir: Path) -> Path:

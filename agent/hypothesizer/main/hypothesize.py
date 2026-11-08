@@ -20,13 +20,15 @@ from pydantic import BaseModel, Field
 from auditor.main.corpus import TraceStore, load_games, load_seed_corpus
 from ledger.main.models import Claim, FindingKind, Source, Status
 from ledger.main.store import Ledger
+from livefeed.main.events import EventLog, safe_emit
 from llm.main.muse import MuseClient, MuseError
-from prober.main.designer import design_experiments
+from prober.main.designer import design_experiments, select_experiment
 from prober.main.probe import hand_size_for, known_cards, run_random_probes, run_seed_probes
 from prober.main.runner import GameRunner, ProbeBudget
 from sandbox.main.binary import BinaryProcess
 from sandbox.main.digsite_fs import DigSiteFS
 from sandbox.main.rule_worker import RuleError, RuleWorker
+from hypothesizer.main.claim_audit import audit_claims, disagreements
 from scorer.main.scorer import GroupReport, Scorer
 
 from .groups import GROUP_ORDER, GROUPS
@@ -63,7 +65,14 @@ class GroupResult:
 
 class Hypothesizer:
     def __init__(self, muse: MuseClient, scorer: Scorer, store: TraceStore, ledger: Ledger, *,
-                 lead_code: str = "", rules_per_round: int = 3, max_rounds: int = 3):
+                 lead_code: str = "", rules_per_round: int = 3, max_rounds: int = 3,
+                 events: EventLog | None = None, subq: Any = None,
+                 probe_list: list[dict[str, Any]] | None = None,
+                 digest_games: int = 6, digest_steps: int = 45):
+        self.events = events
+        self.digest_games, self.digest_steps = digest_games, digest_steps   # how much of the traces Muse reads
+        self.subq = subq                        # T16.9: picks which designed experiment to run next
+        self.probe_list = probe_list or []
         self.muse, self.scorer, self.store, self.ledger = muse, scorer, store, ledger
         self.lead_code = lead_code
         self.rules_per_round = rules_per_round
@@ -117,7 +126,8 @@ class Hypothesizer:
         prompt = build_prompt(
             group, corpus=self.store.fitting(), claims=self._claims(),
             findings_text=self._findings_text(), lead_code=self.lead_code,
-            accepted=self._accepted(group), feedback=feedback, count=self.rules_per_round)
+            accepted=self._accepted(group), feedback=feedback, count=self.rules_per_round,
+            games_in_digest=self.digest_games, digest_steps=self.digest_steps)
         return self.muse.complete_json(prompt, Proposals, system=SYSTEM)
 
     def _admit(self, group: str, proposals: Proposals, result: GroupResult) -> list[str]:
@@ -160,6 +170,8 @@ class Hypothesizer:
                 break
             new_ids = self._admit(group, proposals, result)
             result.added += new_ids
+            safe_emit(self.events, "hypothesize",
+                      {"group": group, "round": round_no, "proposed": len(new_ids)})
             report = self.scorer.adjudicate_group(group)
             result.report = report
             if report.inferred or report.confirmed:
@@ -180,19 +192,34 @@ class Hypothesizer:
         hypotheses = [{"id": c.id, "text": c.text, "code": c.rule["code"]} for c in survivors]
         existing = {g.meta.get("experiment_id") for g in self.store.games()} - {None}
         sample = [s for g in self.store.fitting().games() for s in g.steps][:12]
+        # With SubQ on, Muse designs a few extra candidates and SubQ picks the `count` most informative
+        # ones, one at a time. Without SubQ (or if it fails) the first `count` run, as before.
+        extra = 2 if self.subq is not None else 0
         try:
             designs, _rejected = design_experiments(
                 self.muse, hand_size=hand_size, known_cards=known_cards(self.store),
-                hypotheses=hypotheses, sample_steps=sample, existing_ids=existing, count=count)
+                hypotheses=hypotheses, sample_steps=sample, existing_ids=existing, count=count + extra)
         except MuseError:
             return report
         if not designs:
             return report                      # nothing valid to run: no separation attempt was made
-        for exp in designs:
+        for exp in self._choose(designs, count):
             runner.run_experiment(exp, hand_size)
         # An attempt to separate the survivors has now been made. Survivors that STILL predict
         # identically on every step are one hypothesis; confirm one representative.
         return self.scorer.adjudicate_group(group, collapse_equivalent=True)
+
+
+    def _choose(self, designs: list, count: int) -> list:
+        """The experiments to run, in order. SubQ only ranks; it never changes what is true."""
+        if self.subq is None or len(designs) <= count:
+            return designs[:count] if self.subq is None else designs
+        remaining, chosen = list(designs), []
+        while remaining and len(chosen) < count:
+            pick = select_experiment(self.subq, self.ledger, remaining, self.probe_list)
+            chosen.append(pick)
+            remaining = [e for e in remaining if e.id != pick.id]
+        return chosen
 
 
 def confirmed_rules(ledger: Ledger) -> list[dict[str, Any]]:
@@ -215,7 +242,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--train-probes", type=int, default=6)
     parser.add_argument("--heldout-probes", type=int, default=8)
     parser.add_argument("--separate", type=int, default=1, help="experiment rounds per group")
+    parser.add_argument("--no-subq", action="store_true",
+                        help="do not use SubQ to pick experiments or audit claims (it is on when SUBQ_API_KEY is set)")
+    parser.add_argument("--probe-steps", type=int, default=250, help="max moves per random probe game")
+    parser.add_argument("--digest-games", type=int, default=6, help="whole games shown to Muse per prompt")
+    parser.add_argument("--digest-steps", type=int, default=45, help="moves shown per game in the prompt")
+    parser.add_argument("--quick", action="store_true",
+                        help="short traces: 3+3 probe games of at most 40 moves, 2 rounds, small prompt digests")
     args = parser.parse_args(argv)
+    if args.quick:
+        # Enough to learn and separate rules, but far less to play and to read. Held-out probes stay
+        # at 3 games so the "at least 3 held-out steps" bar for Confirmed can still be met.
+        args.train_probes, args.heldout_probes = min(args.train_probes, 3), min(args.heldout_probes, 3)
+        args.probe_steps, args.rounds = min(args.probe_steps, 40), min(args.rounds, 2)
+        args.digest_games, args.digest_steps = min(args.digest_games, 3), min(args.digest_steps, 20)
 
     run_dir = Path(args.runs_dir) / args.run_id
     fs = DigSiteFS(args.dig_site)
@@ -223,22 +263,34 @@ def main(argv: list[str] | None = None) -> int:
     for game in load_games(run_dir / "probe_games.jsonl"):
         store.add_game(game)
     ledger = Ledger(run_dir / "ledger.jsonl", trace_validator=store.exists)
-    scorer = Scorer(ledger, store)
+    events = EventLog(run_dir)
+    scorer = Scorer(ledger, store, events=events)
     muse = MuseClient()
+    subq = None
+    if not args.no_subq:                    # T16.9: SubQ takes part in a real run when its key is there
+        try:
+            from llm.main.subq import SubqClient
+            subq = SubqClient()
+        except RuntimeError as exc:
+            print(f"(SubQ is off: {exc})")
+    probe_path = run_dir / "probe_list.json"
+    probe_list = json.loads(probe_path.read_text()) if probe_path.exists() else []
     lead_code = "\n\n".join(f"# {p}\n{fs.read_text(p)}" for p in ("source/engine.py", "source/state.py"))
-    hypothesizer = Hypothesizer(muse, scorer, store, ledger, lead_code=lead_code, max_rounds=args.rounds)
+    hypothesizer = Hypothesizer(muse, scorer, store, ledger, lead_code=lead_code, max_rounds=args.rounds,
+                                events=events, subq=subq, probe_list=probe_list,
+                                digest_games=args.digest_games, digest_steps=args.digest_steps)
     hand_size = hand_size_for(ledger, store)
 
     with BinaryProcess(fs) as box:
         runner = GameRunner(box, store, ledger=ledger, run_id=args.run_id, budget=ProbeBudget(),
-                            save_path=run_dir / "probe_games.jsonl")
+                            save_path=run_dir / "probe_games.jsonl", events=events)
         run_seed_probes(runner, hand_size)                         # idempotent: skips done ones
         have = lambda split: sum(1 for g in store.games()
                                  if g.origin == "probe" and g.label.startswith("probe:") and g.split == split)
         run_random_probes(runner, max(0, args.train_probes - have("train")), "train",
-                          first_seed=1000 + have("train"))
+                          first_seed=1000 + have("train"), max_steps=args.probe_steps)
         run_random_probes(runner, max(0, args.heldout_probes - have("heldout")), "heldout",
-                          first_seed=5000 + have("heldout"))
+                          first_seed=5000 + have("heldout"), max_steps=args.probe_steps)
         groups = [g for g in args.groups.split(",") if g]
         results = hypothesizer.run_groups(groups, workers=args.workers)
         for _ in range(args.separate):
@@ -249,6 +301,12 @@ def main(argv: list[str] | None = None) -> int:
                for r in results}
     summary["final"] = {g: scorer.adjudicate_group(g).__dict__ | {"scores": None} for g in groups}
     (run_dir / "hypotheses.json").write_text(json.dumps(summary, indent=2, default=str))
+    if subq is not None:                    # T6.6: a second opinion on every claim; disagreements are for a human
+        rows = audit_claims(subq, ledger, store, limit=60)
+        (run_dir / "claim_audit.json").write_text(json.dumps(
+            {"checked": len(rows), "disagreements": disagreements(rows)}, indent=2, default=str))
+        print(f"SubQ claim audit: {len(rows)} checked, {len(disagreements(rows))} disagree "
+              f"(see claim_audit.json) | subq tokens: {subq.budget.summary().get('subq')}")
     print("ledger:", ledger.counts(), "| muse tokens:", muse.budget.summary())
     for group in groups:
         s = summary["final"][group]

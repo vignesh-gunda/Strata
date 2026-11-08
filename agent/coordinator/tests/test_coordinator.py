@@ -53,7 +53,7 @@ def run_dir(tmp_path):
 
 def make(tmp_path, run_dir, subq=None, runner=None, emitted=None):
     emitted = emitted if emitted is not None else []
-    runner = runner or (lambda module, run_id, runs_dir: StageResult(0, "ok"))
+    runner = runner or (lambda module, run_id, runs_dir, *extra: StageResult(0, "ok"))
     return Coordinator(tmp_path, run_dir.name, emitted.append, subq=subq, stage_runner=runner,
                        sleep=lambda s: None), emitted
 
@@ -183,7 +183,7 @@ def test_report_summary_mentions_wrong_manual_claims(tmp_path, run_dir):
 def test_start_acknowledges_immediately_and_reports_progress(tmp_path, run_dir):
     gate = threading.Event()
 
-    def runner(module, run_id, runs_dir):
+    def runner(module, run_id, runs_dir, *extra):
         gate.wait(5)
         return StageResult(0, "done")
 
@@ -195,7 +195,7 @@ def test_start_acknowledges_immediately_and_reports_progress(tmp_path, run_dir):
     gate.set()
     chat.runner.join(10)
     assert emitted[-1].startswith("Run r-t finished")
-    assert sum(m.startswith("Finished") or m.startswith("Rebuild") for m in emitted) == len(STAGES)
+    assert sum(m.startswith(("Finished", "Rebuild", "The report is written")) for m in emitted) == len(STAGES)
     assert "finished" in chat.handle("status")
 
 
@@ -203,7 +203,7 @@ def test_second_start_while_running_does_not_start_twice(tmp_path, run_dir):
     gate = threading.Event()
     calls = []
 
-    def runner(module, run_id, runs_dir):
+    def runner(module, run_id, runs_dir, *extra):
         calls.append(module)
         gate.wait(5)
         return StageResult(0)
@@ -220,7 +220,7 @@ def test_stage_failure_is_retried_then_stops_and_resumes(tmp_path, run_dir):
     attempts = {"hypothesizer.main.hypothesize": 0}
     fail = {"on": True}
 
-    def runner(module, run_id, runs_dir):
+    def runner(module, run_id, runs_dir, *extra):
         if module == "hypothesizer.main.hypothesize":
             attempts[module] += 1
             if fail["on"]:
@@ -238,21 +238,64 @@ def test_stage_failure_is_retried_then_stops_and_resumes(tmp_path, run_dir):
 
     fail["on"] = False
     seen = []
-    chat.runner._stage_runner = lambda m, r, d: (seen.append(m), StageResult(0))[1]
+    chat.runner._stage_runner = lambda m, r, d, *x: (seen.append(m), StageResult(0))[1]
     ack = chat.handle("start")
     chat.runner.join(10)
     assert "Resuming after survey, audit" in ack
-    assert seen[0] == "hypothesizer.main.hypothesize" and len(seen) == 2    # survey, audit skipped
+    assert seen[0] == "hypothesizer.main.hypothesize" and len(seen) == 3    # survey, audit skipped
     assert RunState.load(run_dir, run_dir.name).finished
 
 
 def test_blocked_rebuild_is_an_outcome_not_a_crash(tmp_path, run_dir):
-    def runner(module, run_id, runs_dir):
+    def runner(module, run_id, runs_dir, *extra):
         return StageResult(1 if module == "rebuilder.main.cli" else 0)
     chat, emitted = make(tmp_path, run_dir, runner=runner)
     chat.handle("start")
     chat.runner.join(10)
     assert any("blocked" in m for m in emitted) and emitted[-1].startswith("Run r-t finished")
+
+
+# ---------- T16.10: a blocked rebuild that demoted rules gets one more round ----------
+def _demote_c2(run_dir):
+    Ledger(run_dir / "ledger.jsonl").demote(
+        "c-0002", "the rebuild diverged from the original in pressure; this rule must be proven again")
+
+
+def test_a_blocked_rebuild_that_demoted_rules_is_tried_again_once(tmp_path, run_dir):
+    seen = []
+
+    def runner(module, run_id, runs_dir, *extra):
+        seen.append(module)
+        if module == "rebuilder.main.cli":
+            if seen.count(module) == 1:
+                _demote_c2(run_dir)
+                return StageResult(1, "blocked")
+            return StageResult(0, "accepted")
+        return StageResult(0)
+    chat, emitted = make(tmp_path, run_dir, runner=runner)
+    chat.handle("start")
+    chat.runner.join(10)
+    assert seen == ["surveyor.main.survey", "auditor.main.audit", "hypothesizer.main.hypothesize",
+                    "rebuilder.main.cli", "hypothesizer.main.hypothesize", "rebuilder.main.cli",
+                    "report.main.cli"]
+    assert any("testing those rules again" in m for m in emitted)
+    assert RunState.load(run_dir, run_dir.name).finished
+
+
+def test_the_extra_round_happens_only_once(tmp_path, run_dir):
+    seen = []
+
+    def runner(module, run_id, runs_dir, *extra):
+        seen.append(module)
+        if module == "rebuilder.main.cli":
+            if seen.count(module) == 1:
+                _demote_c2(run_dir)
+            return StageResult(1, "blocked")
+        return StageResult(0)
+    chat, _ = make(tmp_path, run_dir, runner=runner)
+    chat.handle("start")
+    chat.runner.join(10)
+    assert seen.count("rebuilder.main.cli") == 2 and seen[-1] == "report.main.cli"
 
 
 # ---------- T10.5 reliability ----------
@@ -291,3 +334,26 @@ def test_corrupt_state_file_restarts_stage_list(tmp_path):
     d.mkdir()
     RunState.path(d).write_text("{nope")
     assert RunState.load(d, "r-s").completed == []
+
+
+# ---------- short traces (the quick profile) ----------
+def test_quick_profile_is_the_default_and_only_shortens_the_hypothesize_stage(tmp_path, run_dir):
+    seen = {}
+    chat, _ = make(tmp_path, run_dir, runner=lambda module, run_id, runs_dir, *extra: seen.setdefault(module, extra) and StageResult(0) or StageResult(0))
+    chat.handle("start")
+    chat.runner.join(10)
+    assert chat.runner.profile == "quick"
+    assert seen["hypothesizer.main.hypothesize"] == ("--quick",)
+    assert seen["surveyor.main.survey"] == () and seen["rebuilder.main.cli"] == ("--language", "js")
+
+
+def test_full_profile_passes_no_extra_arguments(tmp_path, run_dir):
+    from coordinator.main.runs import RunManager
+    seen = {}
+    manager = RunManager(tmp_path, run_dir.name, lambda m: None, profile="full", sleep=lambda s: None,
+                         stage_runner=lambda module, run_id, runs_dir, *extra: seen.setdefault(module, extra) and StageResult(0) or StageResult(0))
+    manager.start()
+    manager.join(10)
+    assert seen["hypothesizer.main.hypothesize"] == ()
+    with pytest.raises(ValueError):
+        RunManager(tmp_path, run_dir.name, lambda m: None, profile="huge")

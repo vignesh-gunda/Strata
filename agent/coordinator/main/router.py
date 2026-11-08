@@ -99,6 +99,11 @@ class Router:
         self._subq = subq
         self._sleep = sleep
 
+    def obvious(self, text: str) -> Route | None:
+        """A short, unambiguous command routed by keywords alone (no model)."""
+        guess = keyword_intent(text)
+        return Route(guess, "rules") if _is_obvious(text, guess) else None
+
     def route(self, text: str) -> Route:
         guess = keyword_intent(text)
         if _is_obvious(text, guess):

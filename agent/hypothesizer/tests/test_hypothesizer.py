@@ -326,3 +326,96 @@ def test_claim_audit_skips_claims_without_evidence_and_survives_api_errors():
     subq = SubqClient("k", transport=AuditTransport(fail_on="shaky"), sleep=lambda s: None)
     rows = audit_claims(subq, ledger, store)
     assert {r.claim_id for r in rows} == {good.id, refuted.id}    # 'shaky' failed, 'no evidence' skipped
+
+
+# ---------- T16.9: SubQ picks which designed experiment runs ----------
+
+class PickLast:
+    """A SubQ stand-in that always picks the last option it is offered."""
+
+    def __init__(self):
+        self.offered = []
+
+    def choice(self, state, instructions, options):
+        self.offered.append(list(options))
+        from llm.main.subq import Choice
+        last = list(options)[-1]
+        return Choice(last, {o: float(o == last) for o in options}, 0.9)
+
+
+def _separation_world(subq):
+    same_a = legal_rule("    return [{'type': 'draw'}]")
+    same_b = legal_rule("    return [{'type': 'draw'}]  # variant")
+    store = TraceStore()
+    store.add_game(make_game("g-1", [step(0, [DRAW])] * 2, split="train"))
+    store.add_game(make_game("g-2", [step(0, [DRAW])] * 4, split="heldout", start=10))
+    ledger = Ledger(trace_validator=store.exists)
+    experiments = [{"id": f"e-m{n}", "title": f"t{n}", "players": 2, "hands": [["vent"] * 4] * 2,
+                    "pile": ["vent"] * 4, "actions": [{"type": "play", "card": "vent"}],
+                    "claim_topics": [], "rationale": "r"} for n in (1, 2, 3)]
+    transport = ScriptedMuse(rules_reply(same_a, same_b), {"experiments": experiments})
+    muse = MuseClient("k", transport=transport, sleep=lambda s: None)
+    hyp = Hypothesizer(muse, Scorer(ledger, store), store, ledger, subq=subq,
+                       probe_list=[{"topic": "function:_draw", "text": "x", "rank": 1}])
+    hyp.run_group("legal")
+    ran = []
+
+    class FakeRunner:
+        def run_experiment(self, exp, hand_size):
+            ran.append(exp.id)
+            store.add_game(make_game(f"px-{len(ran):04d}", [step(0, [DRAW])], split="train", origin="probe",
+                                     prefix="x", meta={"experiment_id": exp.id}))
+    return hyp, FakeRunner(), ran, transport
+
+
+def test_subq_chooses_which_experiments_run():
+    subq = PickLast()
+    hyp, runner, ran, transport = _separation_world(subq)
+    hyp.separate("legal", runner, 4, count=1)
+    assert ran == ["e-m3"]                         # three candidates were designed, SubQ's pick ran
+    assert subq.offered and "e-m3" in subq.offered[0]
+    assert "up to 3 experiments" in transport.prompts[1]
+
+
+def test_without_subq_the_first_designs_run_as_before():
+    hyp, runner, ran, transport = _separation_world(None)
+    hyp.separate("legal", runner, 4, count=2)
+    assert ran == ["e-m1", "e-m2"] and "up to 2 experiments" in transport.prompts[1]
+
+
+# ---------- short traces ----------
+def test_prompt_digest_size_follows_the_settings():
+    from hypothesizer.main.prompts import build_prompt
+    from auditor.main.corpus import FittingCorpus
+    games = [make_game(f"g-{n}", [step(n % 7, [{"type": "draw"}]) for _ in range(30)], start=1 + 100 * n)
+             for n in range(8)]
+    corpus = FittingCorpus(games)
+    common = dict(corpus=corpus, claims=[], findings_text=[], lead_code="", accepted=[], feedback=[])
+    big = build_prompt("legal", **common)
+    small = build_prompt("legal", **common, games_in_digest=3, digest_steps=10)
+    assert len(small) < len(big)
+    assert small.count("\n\n", small.index("WHOLE GAMES")) < big.count("\n\n", big.index("WHOLE GAMES"))
+
+
+def test_quick_flag_shrinks_probes_rounds_and_digests(monkeypatch):
+    import hypothesizer.main.hypothesize as hyp
+    captured = {}
+
+    class Stop(Exception):
+        pass
+
+    def fake_fs(path):
+        raise Stop
+    monkeypatch.setattr(hyp, "DigSiteFS", fake_fs)
+    real_parse = hyp.argparse.ArgumentParser.parse_args
+
+    def spy(self, argv=None, namespace=None):
+        ns = real_parse(self, argv, namespace)
+        captured["ns"] = ns
+        return ns
+    monkeypatch.setattr(hyp.argparse.ArgumentParser, "parse_args", spy)
+    with pytest.raises(Stop):
+        hyp.main(["--quick", "--run-id", "r-x"])
+    ns = captured["ns"]
+    assert (ns.train_probes, ns.heldout_probes, ns.probe_steps, ns.rounds) == (3, 3, 40, 2)
+    assert (ns.digest_games, ns.digest_steps) == (3, 20)

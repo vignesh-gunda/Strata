@@ -60,7 +60,7 @@ def focus_steps(group: Group, corpus: FittingCorpus, per_signature: int = 2,
 def build_prompt(group_name: str, *, corpus: FittingCorpus, claims: list[Claim],
                  findings_text: list[str], lead_code: str, accepted: list[Claim],
                  feedback: list[dict[str, Any]], count: int = 3,
-                 games_in_digest: int = 6) -> str:
+                 games_in_digest: int = 6, digest_steps: int = 45) -> str:
     group = GROUPS[group_name]
     games = corpus.games()
     # a spread of games: experiments (probe) first because they are small and targeted
@@ -85,7 +85,7 @@ def build_prompt(group_name: str, *, corpus: FittingCorpus, claims: list[Claim],
                  + "\n".join(json.dumps({k: s[k] for k in SETUP_STEP_KEYS if k in s})
                              for s in examples[:4]))
     parts.append("MORE STEPS, one line each:\n" + "\n".join(step_line(s) for s in examples[4:]))
-    parts.append("WHOLE GAMES (compact):\n" + "\n\n".join(game_digest(g, max_steps=45)
+    parts.append("WHOLE GAMES (compact):\n" + "\n\n".join(game_digest(g, max_steps=digest_steps)
                                                           for g in digest_games))
     if group.kind == "setup":
         parts.append("DECKS AND OPENING VIEWS:\n" + "\n".join(
