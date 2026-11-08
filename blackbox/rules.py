@@ -19,8 +19,11 @@ Base rules (2-4 players):
   next card play is discarded with no effect, which clears the jam. Drawing
   is not affected.
 - scan: reveal the top 2 cards of the draw pile to the player.
-- End: the last living seat wins. If every living hand and the draw pile are
-  empty, the game ends with no winner.
+- Empty draw pile: the discard pile, except its top card, becomes the new
+  draw pile (same order the cards were played) and the draw goes ahead.
+- End: there is always a winner. The last living seat wins. If the game
+  reaches turn 200, or nobody has any cards left, the living seat holding the
+  fewest cards wins (lower seat number breaks a tie).
 
 Mutations (1-3 per run, chosen by seed) change these rules; see ``Mutation``.
 """

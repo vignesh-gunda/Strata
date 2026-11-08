@@ -44,7 +44,8 @@ async function handle(message) {
     await arena.step(trace);
   } else if (message.kind === "end") {
     totals = { ...totals, games: totals.games + 1 };
-    if (session.game) backstage.addResult({ ...session.game, winner: message.data.winner, steps: message.data.steps });
+    const { winner, steps } = message.data;
+    if (session.game && Number.isInteger(winner)) backstage.addResult({ ...session.game, winner, steps });
   }
   backstage.setStats(totals, facts.list().length);
 }

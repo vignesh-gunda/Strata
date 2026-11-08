@@ -222,9 +222,9 @@ export class Arena {
   async announce(winner) {
     this.overlay.replaceChildren(
       el("div", "overlay-kicker", "GAME OVER"),
-      el("div", "overlay-title", winner === null ? "Draw" : `${playerName(winner)} wins`),
+      el("div", "overlay-title", `${playerName(winner)} wins`),
     );
-    if (winner !== null) this.overlay.style.setProperty("--seat", SEAT_COLORS[winner]);
+    this.overlay.style.setProperty("--seat", SEAT_COLORS[winner]);
     this.overlay.classList.add("show");
     await wait(this.ms(1600));
   }

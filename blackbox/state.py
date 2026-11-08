@@ -17,6 +17,7 @@ EVENT_TYPES: tuple[str, ...] = (
     "eliminated",
     "revealed",
     "drew",
+    "recycled",
     "passed",
     "turn_passed",
     "game_over",
