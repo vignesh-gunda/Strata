@@ -32,11 +32,15 @@ agent/
   tasks.md                this file
   <component>/main/       code (import as `from <component>.main.x import y`)
   <component>/tests/      that component's tests only
-  Components: llm (T0, done), sandbox (T1, T9), ledger (T2), surveyor (T3),
+  Components: controls (T12), llm (T0, done), sandbox (T1, T9), ledger (T2), surveyor (T3),
               auditor (T4), prober (T5), hypothesizer (T6), rebuilder (T7),
               verifier (T8), coordinator (T10, local), report (T11),
               concierge (T14), livefeed (T15)
-  rebuild/                JavaScript output (generated)
+  ../ui/                  the UI app (top level, not under agent/). It reads a run folder with
+                          `--run-dir`: `/api/ledger` (claims) and `/api/feed` (live action lines).
+                          The agent never imports the UI. The UI imports `livefeed.main.export`.
+                          T16 adds the ask box, the agent trace stream and the live file panel here.
+  ../rebuild/<run_id>/<language>/   the rebuilt code (generated, top of the project)
   runs/                   per-run ledger and traces (gitignored)
   Run all tests: cd agent && .venv/bin/python -m pytest
 ```
@@ -54,6 +58,7 @@ agent/
 | Coordinator | T10 | SubQ (routing) | everything it is allowed to show | chat |
 | Concierge | T14 | Muse (understand and answer), SubQ (quick routing) | ledger, traces, rebuild, run state | chat, run requests |
 | Live feed | T15 | none (code templates) | event log | one-line action stream |
+| UI app | T16 | none (calls the concierge, which uses Muse and SubQ) | run folder, rebuild output folder | ask answers, live streams |
 
 ---
 
@@ -188,22 +193,22 @@ Sub-agent: Coordinator. Everything runs locally on the user's machine. There is 
 
 ## T11. Report
 
-- [ ] T11.1 Sections: Observed, Confirmed, Inferred and Open, Equivalence, Mutation check
-- [ ] T11.2 **Where the evidence was wrong**: table of artifact claims with source, verdict and trace ID (for example Manual, "Vent lowers pressure by 3", Refuted, stale, trace ID)
-- [ ] T11.3 Mutation check: reveal the planted mutations from `services/pressure/sealed/runs/` **only in the report step, after the run**, never in a prompt
-- [ ] T11.4 Every claim in the report cites trace IDs, and the build fails if one does not
+- [x] T11.1 Sections: Observed, Confirmed, Inferred and Open, Equivalence, Mutation check
+- [x] T11.2 **Where the evidence was wrong**: table of artifact claims with source, verdict and trace ID (for example Manual, "Vent lowers pressure by 3", Refuted, stale, trace ID)
+- [x] T11.3 Mutation check: reveal the planted mutations from `services/pressure/sealed/runs/` **only in the report step, after the run**, never in a prompt
+- [x] T11.4 Every claim in the report cites trace IDs, and the build fails if one does not
 
 ## T12. Controls and ablation
 
-- [ ] T12.1 Ablation: traces only vs traces plus artifacts. Same Confirmed rules expected, fewer probes with artifacts
-- [ ] T12.2 Opaque-token run (`--opaque`) reaches the same ledger
-- [ ] T12.3 Zero-probe baseline scores low, with a learning curve over probe count
+- [x] T12.1 Ablation: traces only vs traces plus artifacts. Same Confirmed rules expected, fewer probes with artifacts. Done as a replay of a saved run (`python -m controls.main.cli --ablation`): the arms differ only in probe order. Result on `r-live`: same Confirmed rules, one probe game settles both, so the "fewer probes" expectation is NOT supported by that count; on coverage of new situations the artifact order reaches all of them (44 games) while traces-only never does but reaches 50% and 90% sooner. Live arms (a fresh Muse run each) are not done
+- [x] T12.2 Opaque-token run (`--opaque`) reaches the same ledger. Done as a replay (`python -m controls.main.cli --opaque`): every card name becomes a token in the games and the rules, and all 30 rules of `r-live` keep their status. A live run where Muse sees only tokens is not done
+- [x] T12.3 Zero-probe baseline scores low, with a learning curve over probe count (`python -m controls.main.cli --curve`). On `r-live`: 0 Confirmed with 0 probes, 8 with 1 probe. Rescoring from scratch confirms 8 rules where the saved ledger shows 6, because the saved run adjudicated at different moments
 
 ## T13. Docs and submission
 
-- [ ] T13.1 Update the top-level `README.md`: it still describes Exploding Kittens, but the built black box is Pressure
-- [ ] T13.2 Run and test instructions, public repo check, confirm `.env`, `sealed/runs/` and `dig-site/bin/` are ignored
-- [ ] T13.3 Demo rehearsal running locally (terminal and the UI app), including a replay of a saved run as a fallback
+- [x] T13.1 Update the top-level `README.md`: it still describes Exploding Kittens, but the built black box is Pressure
+- [x] T13.2 Run and test instructions, public repo check, confirm `.env`, `sealed/runs/` and `dig-site/bin/` are ignored (`python3 scripts/check_repo.py`, tested in `agent/tests/test_repo_check.py`)
+- [x] T13.3 Demo rehearsal running locally (terminal and the UI app), including a replay of a saved run as a fallback (`agent/.venv/bin/python scripts/rehearse.py [--keep]`; code-only stages, no model calls, so live Muse and SubQ steps are not rehearsed)
 
 ## T14. One-line requests and plain-language answers
 
@@ -215,14 +220,14 @@ Examples of what a user can type:
 - "What did you find wrong in the manual?"
 - "How far along is the rebuild?"
 
-- [ ] T14.1 Intent step: Muse reads the one-liner and picks one of: `rebuild` (with a target language), `explain` (a question about the service), `status`, or `out_of_scope`. SubQ `choice()` may pre-route obvious cases, but Muse makes the final call
-- [ ] T14.2 Scope guard: only questions about the service being built are answered (its rules, claims, findings, traces, rebuild, run status). Everything else gets one polite line saying so. User text and trace contents are treated as untrusted and go through the prompt firewall (T0.6). Nothing from `services/` can appear in an answer before the T11.3 reveal
-- [ ] T14.3 Target language config: turn the language named in the one-liner into `{name, build_command, run_command, file_layout, prompt_hints}` (JS and Go ship first). If the toolchain is not installed, say so plainly and do not fall back silently. Output goes to `rebuild/<lang>/`
-- [ ] T14.4 Rebuild trigger: a `rebuild` request starts the full loop (survey, probe, hypothesize, rebuild, verify) as a background run on the chosen language, acknowledges immediately, and streams progress through T15
-- [ ] T14.5 Answer retrieval: pull the relevant claims, findings and trace IDs from the ledger first. Long-context reading (SubQ, or Muse if SubQ cannot do it) is used to find evidence, not to remember things. The ledger on disk stays the single memory
-- [ ] T14.6 Answer writing: Muse (the best available model) writes a short, plain answer from the retrieved evidence only. Rules for the style: 2 to 4 sentences, no jargon, no internal names like "tier" or "ledger" unless the user asks, one trace ID cited at the end for each fact. If the evidence is missing, the answer says "not known yet" and does not guess
-- [ ] T14.7 Honest uncertainty: answers say whether a rule is Confirmed, Inferred or still Open, in everyday words ("proven by testing", "likely, not yet proven", "still unknown")
-- [ ] T14.8 Tests: an off-topic question is declined, an `explain` answer cites existing trace IDs, a question about an unconfirmed rule is answered as "not known yet", a prompt that tries to pull `services/` content is refused, "rebuild in Go" with no Go installed returns a clear message
+- [x] T14.1 Intent step: Muse reads the one-liner and picks one of: `rebuild` (with a target language), `explain` (a question about the service), `status`, or `out_of_scope`. SubQ `choice()` may pre-route obvious cases, but Muse makes the final call
+- [x] T14.2 Scope guard: only questions about the service being built are answered (its rules, claims, findings, traces, rebuild, run status). Everything else gets one polite line saying so. User text and trace contents are treated as untrusted and go through the prompt firewall (T0.6). Nothing from `services/` can appear in an answer before the T11.3 reveal
+- [x] T14.3 Target language config: turn the language named in the one-liner into `{name, build_command, run_command, file_layout, prompt_hints}` (JS and Go ship first). If the toolchain is not installed, say so plainly and do not fall back silently. Output goes to `rebuild/<lang>/`
+- [x] T14.4 Rebuild trigger: a `rebuild` request starts the full loop (survey, probe, hypothesize, rebuild, verify) as a background run on the chosen language, acknowledges immediately, and streams progress through T15
+- [x] T14.5 Answer retrieval: pull the relevant claims, findings and trace IDs from the ledger first. Long-context reading (SubQ, or Muse if SubQ cannot do it) is used to find evidence, not to remember things. The ledger on disk stays the single memory
+- [x] T14.6 Answer writing: Muse (the best available model) writes a short, plain answer from the retrieved evidence only. Rules for the style: 2 to 4 sentences, no jargon, no internal names like "tier" or "ledger" unless the user asks, one trace ID cited at the end for each fact. If the evidence is missing, the answer says "not known yet" and does not guess
+- [x] T14.7 Honest uncertainty: answers say whether a rule is Confirmed, Inferred or still Open, in everyday words ("proven by testing", "likely, not yet proven", "still unknown")
+- [x] T14.8 Tests: an off-topic question is declined, an `explain` answer cites existing trace IDs, a question about an unconfirmed rule is answered as "not known yet", a prompt that tries to pull `services/` content is refused, "rebuild in Go" with no Go installed returns a clear message
 
 **Done when:** typing "rebuild it in Go" starts a run, typing "explain the rules" returns a short plain answer that cites real traces, and typing an unrelated question gets a polite decline.
 
@@ -240,15 +245,36 @@ Example lines:
 - "Rebuilt the engine in Go: 3 behaviors still unknown."
 - "Checked 3,200 of 5,000 games: 0 differences so far."
 
-- [ ] T15.1 Event log: every agent action (survey, probe, score, rebuild, verify, repair) appends one structured event to `runs/<run_id>/events.jsonl` (append-only, with timestamp, loop number and trace IDs)
-- [ ] T15.2 Line writer: a fixed template per event type turns an event into one plain sentence. Templates, not a model, so the line cannot say something that did not happen. Max one line per loop, with a short loop counter
-- [ ] T15.3 Live stream: the feed is pushed to the local chat as each loop finishes (T10.3) and can also be tailed from the terminal, so the demo shows the agent working in real time
-- [ ] T15.4 Next-step line: after each action, one line says what happens next ("Next: test two doubles in a row"), taken from the probe list and loop state
-- [ ] T15.5 Safe by default: lines never include anything from `services/`, API keys or raw model output. The same firewall checks apply
-- [ ] T15.6 Replay: `events.jsonl` can be replayed at speed, so the demo can be rehearsed or recovered if live calls are slow
-- [ ] T15.7 Tests: every event type has a template, a line never exceeds one sentence, a forbidden string in an event is blocked, replay produces the same lines in the same order
+- [x] T15.1 Event log: every agent action (survey, probe, score, rebuild, verify, repair) appends one structured event to `runs/<run_id>/events.jsonl` (append-only, with timestamp, loop number and trace IDs)
+- [x] T15.2 Line writer: a fixed template per event type turns an event into one plain sentence. Templates, not a model, so the line cannot say something that did not happen. Max one line per loop, with a short loop counter
+- [x] T15.3 Live stream: the feed is pushed to the local chat as each loop finishes (T10.3), to the UI app's "Behind the scenes" tab (`ui/server.py --run-dir agent/runs/<run_id>`, `GET /api/feed`, Server-Sent Events with the loop number as the event ID so a reconnect resumes), and can be tailed from the terminal (`python -m livefeed.main.stream --run-id r-01 --follow`), so the demo shows the agent working in real time
+- [x] T15.4 Next-step line: after each action, one line says what happens next ("Next: test two doubles in a row"), taken from the probe list and loop state
+- [x] T15.5 Safe by default: lines never include anything from `services/`, API keys or raw model output. The same firewall checks apply
+- [x] T15.6 Replay: `events.jsonl` can be replayed at speed, so the demo can be rehearsed or recovered if live calls are slow
+- [x] T15.7 Tests: every event type has a template, a line never exceeds one sentence, a forbidden string in an event is blocked, replay produces the same lines in the same order
 
 **Done when:** a live run shows one clear line per loop in the chat, in order, and the same run can be replayed from disk.
+
+## T16. Ask box and live build view in the UI
+
+Sub-agent: none new. This task lives in the existing top-level `ui/` app (not a new app) and calls the concierge (T14) and the live feed (T15). The user types one line in the UI, watches the agent's own traces stream, reads the one-line updates, and sees the project folder being written live.
+
+What the user sees, top to bottom: an **ask box**, a **one-line update strip**, the **game table showing the agent's own probe games**, and a **live file panel** for the code being written.
+
+- [x] T16.1 Ask endpoint: `POST /api/ask` in `ui/server.py` takes one line and returns the concierge's reply (`Concierge.handle`). The server builds the Muse and SubQ clients (keys come from `.env`, never sent to the page), connects the start-run and status callbacks to the coordinator, and runs a rebuild request in the background so the reply comes back at once. The page never sees keys or raw model output *Built: `ui/agent_bridge.py` (`AgentBridge`) and `POST /api/ask` in `ui/server.py`. Start the UI with `--run-dir agent/runs/<run_id>`; `--no-ask` turns it off.*
+- [x] T16.2 Ask box in the page: one text input, a send button, and the plain-language answer shown under it. Shows a clear message when keys are missing, the toolchain for the chosen language is not installed, or the question is off-topic. Examples to try: "rebuild it in Go", "explain the rules", "what did you find wrong in the manual?" *Built: the "Ask the agent" tab (`ui/static/ask.js`) with example chips.*
+- [x] T16.3 Agent trace stream: `GET /api/agent-traces` (Server-Sent Events) tails `runs/<run_id>/probe_games.jsonl` and sends each new step as it is written, in the same shape the game table already understands, so the existing table shows the agent's own probe games and not the built-in simulator. A reconnect resumes from the last step. The page labels clearly which source it is showing (built-in simulator or agent run) *Built: `ui/agent_traces.py`, `GET /api/agent-traces`, and a "Table: simulator / agent's games" switch in the header.*
+- [x] T16.4 One-line updates placed with the ask box: the existing `/api/feed` lines appear right under the ask box as the run goes, one line per loop plus the "Next:" line. Verify that a run started from the ask box really writes to `events.jsonl` (the feed depends on it) and fix the start path if it does not *Built: the same lines show in the ask tab. Checked in code that every pipeline stage (survey, audit, probe, hypothesize, rebuild) writes to `events.jsonl`; the live check is T16.12.*
+- [x] T16.5 Live project-folder view: `GET /api/files` lists the files in the rebuild output folder and `GET /api/files/stream` (Server-Sent Events) reports when a file is created or changed. The page shows a file list and the current contents of the selected file, with the newest change highlighted. Rules: read-only; the path is jailed to the rebuild output folder only (no `..`, no symlinks out, never `services/`, `dig-site/bin/`, `.env` or `runs/` outside this run); file size is capped; contents pass the prompt firewall before they are shown *Built: `ui/project_files.py` (`FileJail`), `GET /api/files`, `/api/files/read`, `/api/files/stream`, and the file panel in the ask tab.*
+- [x] T16.6 Output location: the rebuild writes to `<repo>/rebuild/<run_id>/<language>/` (top of the project, next to `agent/` and `ui/`; one sub-folder per run so runs never overwrite each other). Decided in `agent/rebuilder/main/location.py`; runs kept outside `agent/runs/` (tests, rehearsals) keep it inside the run folder. Ignored by git like `agent/runs/`
+- [x] T16.7 Run controls: only one run at a time (a second request gets a clear "a run is already going" message), a Cancel button that stops the background run cleanly and leaves the ledger and traces intact, and a small budget readout (Muse and SubQ tokens used against the caps from T0.5) *Built: the coordinator refuses a second start, Cancel (`POST /api/cancel`, "Stop the run") kills the running stage and leaves the ledger and traces, and the page shows tokens used. Limit: the token readout counts only the ask box's own model calls; pipeline stages keep their own totals.*
+- [x] T16.8 Safe by default: the server listens on the local machine only, the ask endpoint limits input length and request rate, and nothing from `services/` or the sealed files can reach the page, the answer, a trace or a file view. The mutation reveal still happens only in the report step (T11.3) *Built: binds to 127.0.0.1, refuses other Host/Origin headers, 400-character and 4 KB input limits, 12 asks per minute, restricted text blocked on traces and files.*
+- [x] T16.9 Use SubQ inside a real run: call `select_experiment` (T5.4) from the probe loop and `audit_claims` (T6.6) after each hypothesize round. Today both exist with tests but no run calls them. Disagreements go to the human-visible list and never change a status. Both fall back cleanly when SubQ is down *Built: the hypothesize stage turns SubQ on when `SUBQ_API_KEY` is set (`--no-subq` turns it off). Muse designs two extra candidate experiments and SubQ picks which ones run (`Hypothesizer._choose`); after the rounds, the claim audit writes `claim_audit.json` with the disagreements.*
+- [x] T16.10 Close the loop on divergences: when the Verifier finds a difference between the binary and the rebuild, record it as a new trace, demote the claims the rebuild relied on, add the open question to the probe list, and feed the shrunk counterexample to the repair step (T7.4). The run ends when the Verifier accepts or the budget runs out *Built: `rebuilder/main/feedback.py` (demote the proven rules for the part that differed, open a claim, put it first on the probe list) and the coordinator queues one extra hypothesize + rebuild round after a blocked rebuild that demoted rules (`MAX_RELEARN_CYCLES`). The failing game is stored as a trace by `record_counterexample`, and the repair step still gets the shrunk counterexample.*
+- [x] T16.11 UI tests: the ask endpoint answers and declines correctly (with fake Muse and SubQ clients), the trace stream resumes after a reconnect, the file endpoints refuse every path escape and secret path, the second concurrent run is refused, cancel works *Built: `ui/tests/test_ask.py` (38 tests).*
+- [ ] T16.12 End-to-end run with the real services: type "rebuild it in Go" (and once in JavaScript) in the ask box, watch the agent's traces stream, the one-line updates appear and the files in `agent/rebuild/<language>/` grow live, then the Verifier accepts the rebuild. Save the run so the demo can replay it if live calls are slow (T15.6)
+
+**Done when:** a user opens the UI, types "rebuild it in Go", sees the agent's own traces and one-line updates stream, watches the code appear in the project folder, and gets an Accepted verdict. A question typed in the same box returns a short plain answer that cites real traces.
 
 ---
 
@@ -263,6 +289,8 @@ Example lines:
 7. T15.1 and T15.2 early (so every later task logs events from the start)
 8. T10.2 to T10.5, T14, T15.3 to T15.7
 9. T11, T12, T13
+10. T16.6 first (fix the output folder), then T16.1 and T16.2, then T16.3 to T16.5, then T16.7 and T16.8, then T16.9 and T16.10, then T16.11 and T16.12
+11. T13 last: the README and demo rehearsal describe the finished system
 
 ## Open decisions
 
