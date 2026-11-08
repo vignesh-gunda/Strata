@@ -34,20 +34,27 @@ class BlackBoxClient:
         opaque: bool = False,
         allow_reveal: bool = False,
         timeout: float = DEFAULT_TIMEOUT,
+        command: Sequence[str] | None = None,
     ) -> None:
-        command = [sys.executable, "-m", "blackbox.server", "--seed", str(seed), "--mutations", str(mutations)]
-        command += [arg for name in mutation_names for arg in ("--mutation", name)]
-        command += ["--opaque"] if opaque else []
-        command += ["--allow-reveal"] if allow_reveal else []
+        """``command`` runs any program that speaks the protocol instead, such as the
+        dig-site binary or a rebuild. The game flags are then ignored, and the
+        program gets no PYTHONPATH, so it must stand on its own."""
+        env = {"PATH": "/usr/bin:/bin"}  # no API keys reach the black box
+        if command is None:
+            command = [sys.executable, "-m", "blackbox.server", "--seed", str(seed), "--mutations", str(mutations)]
+            command += [arg for name in mutation_names for arg in ("--mutation", name)]
+            command += ["--opaque"] if opaque else []
+            command += ["--allow-reveal"] if allow_reveal else []
+            env["PYTHONPATH"] = str(REPO_ROOT)
         self._timeout = timeout
         self._next_id = 0
         self._process = subprocess.Popen(
-            command,
+            list(command),
             cwd=REPO_ROOT,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            env={"PATH": "/usr/bin:/bin", "PYTHONPATH": str(REPO_ROOT)},  # no API keys reach the black box
+            env=env,
         )
 
     def __enter__(self) -> "BlackBoxClient":

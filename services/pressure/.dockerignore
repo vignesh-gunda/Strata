@@ -1,0 +1,8 @@
+tests/
+tools/
+sealed/
+simulate/
+traces/
+**/__pycache__/
+.pytest_cache/
+*.pyc

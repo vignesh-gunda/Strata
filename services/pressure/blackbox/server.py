@@ -56,8 +56,17 @@ def handle_line(box: BlackBox, line: str, allow_reveal: bool = False) -> dict:
     if len(line) > MAX_LINE:
         return _error(None, "invalid_request", "request line too long")
     try:
-        request = RequestModel.model_validate(json.loads(line))
-    except (json.JSONDecodeError, ValidationError, RecursionError) as error:
+        payload = json.loads(line)
+    except (json.JSONDecodeError, RecursionError) as error:
+        return _error(None, "invalid_request", type(error).__name__)
+    return handle_request(box, payload, allow_reveal)
+
+
+def handle_request(box: BlackBox, payload: Any, allow_reveal: bool = False) -> dict:
+    """Run one decoded request. Shared by the JSON-lines server and the HTTP server."""
+    try:
+        request = RequestModel.model_validate(payload)
+    except (ValidationError, RecursionError) as error:
         return _error(None, "invalid_request", type(error).__name__)
     try:
         return {"id": request.id, "ok": True, "result": _dispatch(box, request, allow_reveal)}
@@ -75,13 +84,18 @@ def handle_line(box: BlackBox, line: str, allow_reveal: bool = False) -> dict:
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Strata black box (JSON lines over stdio)")
+    add_box_arguments(parser)
+    return parser.parse_args(argv)
+
+
+def add_box_arguments(parser: argparse.ArgumentParser) -> None:
+    """Flags that configure the game itself. Shared by every transport."""
     parser.add_argument("--seed", type=int, default=0, help="run seed; picks hidden mutations")
     parser.add_argument("--mutations", type=int, default=0, help="how many mutations to plant")
     parser.add_argument("--mutation", action="append", default=[], help="plant a named mutation (repeatable)")
     parser.add_argument("--opaque", action="store_true", help="rename cards, actions and events to c1.. / a1.. / e1..")
     parser.add_argument("--opaque-seed", type=int, default=None, help="token-map seed (default: secret random)")
     parser.add_argument("--allow-reveal", action="store_true", help="allow the reveal method (reports only)")
-    return parser.parse_args(argv)
 
 
 def build_box(args: argparse.Namespace) -> BlackBox:

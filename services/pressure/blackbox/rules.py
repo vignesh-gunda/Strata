@@ -1,28 +1,6 @@
-"""Hidden rules of "Pressure", the original game inside the black box.
+"""Rule set and hidden mutations for the Pressure black box.
 
-HIDDEN FROM AGENTS. Never put this text in a prompt.
-
-Base rules (2-4 players):
-- Setup: deal 4 cards to each seat round-robin from the top of the scripted
-  deck; the rest is the draw pile. Shared pressure starts at 0.
-- Turn: the current seat has 1 action. An action is: play one card from hand,
-  draw the top card (only if the pile is not empty and the hand holds fewer
-  than 6 cards), or pass (only when nothing else is legal). When actions run
-  out, play passes to the next living seat in the current direction.
-- gear1/gear2/gear3: add 1/2/3 to pressure. If pressure reaches 12 or more,
-  the player who played it is eliminated: their hand goes to the discard
-  pile, pressure resets to 0 and the turn passes immediately.
-- vent: lower pressure by 3 (never below 0).
-- reverse: flip the turn direction.
-- double: the next seat to take a turn gets 2 actions instead of 1.
-- jam: the next living seat (current direction) is jammed. A jammed seat's
-  next card play is discarded with no effect, which clears the jam. Drawing
-  is not affected.
-- scan: reveal the top 2 cards of the draw pile to the player.
-- End: the last living seat wins. If every living hand and the draw pile are
-  empty, the game ends with no winner.
-
-Mutations (1-3 per run, chosen by seed) change these rules; see ``Mutation``.
+The full rules are in ``sealed/RULES.md``. Agents never see this package.
 """
 
 from __future__ import annotations
