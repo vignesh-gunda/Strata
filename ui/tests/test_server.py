@@ -88,3 +88,85 @@ def test_stream_rejects_bad_parameters(base_url):
     with pytest.raises(urllib.error.HTTPError) as error:
         get(base_url + "/api/stream?delay=99")
     assert error.value.code == 400
+
+
+# ---------- the agent's run folder: ledger and live feed ----------
+@pytest.fixture()
+def agent_url(tmp_path):
+    from livefeed.main.events import EventLog
+    from ledger.main.models import Source, Status
+    from ledger.main.store import Ledger
+
+    run = tmp_path / "r-ui"
+    ledger = Ledger(run / "ledger.jsonl")
+    claim = ledger.add_claim(text="Hand limit is 7", source=Source.MODEL, created_by="t")
+    ledger.set_status(claim.id, Status.INFERRED, ["t-000001"])
+    log = EventLog(run)
+    log.emit("survey", {"claims": 3, "unknowns": 1})
+    log.emit("score", {"outcome": "refuted", "text": "Vent lowers pressure by 3"}, trace_ids=["t-000412"])
+    server = make_server(0, None, tmp_path / "traces", run)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{server.server_address[1]}", log
+    server.shutdown()
+    server.server_close()
+
+
+def test_ledger_comes_from_the_agent_run_folder(agent_url):
+    url, _ = agent_url
+    ledger = json.loads(get(url + "/api/ledger")[2])
+    assert ledger["connected"] and ledger["claims"] == [
+        {"id": "c-0001", "claim": "Hand limit is 7", "status": "inferred", "evidence": ["t-000001"],
+         "experiment": None}]
+
+
+def test_feed_sends_one_event_per_loop_with_the_loop_as_its_id(agent_url):
+    url, _ = agent_url
+    with urllib.request.urlopen(url + "/api/feed?follow=0", timeout=10) as response:
+        body = response.read().decode()
+    assert "event: status" in body and '"connected":true' in body
+    assert "id: 1\nevent: feed" in body and "id: 2\nevent: feed" in body
+    last = json.loads(body.strip().split("data: ")[-1])
+    assert last["line"] == "[loop 2] Marked 'Vent lowers pressure by 3' as wrong (trace t-000412)."
+    assert last["trace_ids"] == ["t-000412"]
+
+
+def test_feed_resumes_after_the_last_event_id(agent_url):
+    url, _ = agent_url
+    request = urllib.request.Request(url + "/api/feed?follow=0", headers={"Last-Event-ID": "1"})
+    with urllib.request.urlopen(request, timeout=10) as response:
+        body = response.read().decode()
+    assert "id: 1\n" not in body and "id: 2\n" in body
+
+
+def test_feed_pushes_new_loops_while_connected(agent_url):
+    url, log = agent_url
+    threading.Timer(0.5, lambda: log.emit("audit", {"refuted": 1})).start()
+    events = read_events(url + "/api/feed?since=2", 2)       # the status, then the loop written later
+    assert events[0][0] == "status"
+    assert events[1][0] == "feed" and events[1][1]["loop"] == 3 and events[1][1]["type"] == "audit"
+
+
+def test_feed_without_a_run_says_it_is_not_connected(base_url):
+    events = read_events(base_url + "/api/feed", 1)
+    assert events == [("status", {"connected": False, "run": None})]
+
+
+def test_feed_rejects_a_bad_since(agent_url):
+    with pytest.raises(urllib.error.HTTPError) as error:
+        get(agent_url[0] + "/api/feed?since=abc")
+    assert error.value.code == 400
+
+
+def test_feed_replay_resends_the_saved_run_in_order_with_next_lines(agent_url):
+    url, _ = agent_url
+    with urllib.request.urlopen(url + "/api/feed?replay=0", timeout=10) as response:
+        body = response.read().decode()
+    loops = [json.loads(chunk.split("data: ")[1]) for chunk in body.split("\n\n") if chunk.startswith("id:")]
+    assert [e["loop"] for e in loops] == [1, 2]
+    assert loops[0]["next"].startswith("Next: ") and loops[0]["line"].startswith("[loop 1]")
+
+
+def test_feed_rejects_a_bad_replay_speed(agent_url):
+    with pytest.raises(urllib.error.HTTPError) as error:
+        get(agent_url[0] + "/api/feed?replay=fast")
+    assert error.value.code == 400

@@ -2,6 +2,7 @@
 // the plain-language "behind the scenes" view.
 
 import { Arena } from "./arena.js";
+import { AskPanel } from "./ask.js";
 import { Backstage } from "./backstage.js";
 import { ObservedFacts } from "./observed.js";
 
@@ -16,9 +17,11 @@ const MUTATIONS = Number.parseInt(params.get("mutations") || "2", 10);
 const $ = (selector) => document.querySelector(selector);
 const arena = new Arena($("#arena"));
 const backstage = new Backstage($("#backstage"));
+const ask = new AskPanel($("#ask"));
 const facts = new ObservedFacts();
 
-let session = { source: null, running: false, speed: "normal", nextIndex: 0, before: null };
+// "simulator" = the built-in games; "agent" = the probe games the agent itself plays (T16.3)
+let session = { source: null, running: false, speed: "normal", nextIndex: 0, before: null, mode: "simulator", agentNext: 0 };
 let totals = { games: 0, traces: 0 };
 let queue = [];
 let draining = false;
@@ -43,6 +46,7 @@ async function handle(message) {
     backstage.setObserved(facts.list(), fresh);
     await arena.step(trace);
   } else if (message.kind === "end") {
+    session = { ...session, agentNext: session.mode === "agent" ? message.data.index + 1 : session.agentNext };
     totals = { ...totals, games: totals.games + 1 };
     const { winner, steps } = message.data;
     if (session.game && Number.isInteger(winner)) backstage.addResult({ ...session.game, winner, steps });
@@ -72,12 +76,15 @@ function enqueue(kind) {
 
 function start() {
   const { delay } = SPEEDS[session.speed];
-  const source = new EventSource(`/api/stream?seed=${SEED}&mutations=${MUTATIONS}&delay=${delay}&start=${session.nextIndex}`);
+  const url = session.mode === "agent"
+    ? `/api/agent-traces?delay=${delay}&since=${session.agentNext}`
+    : `/api/stream?seed=${SEED}&mutations=${MUTATIONS}&delay=${delay}&start=${session.nextIndex}`;
+  const source = new EventSource(url);
   source.addEventListener("run", (event) => {
     $("#run").textContent = JSON.parse(event.data).run_id;
   });
   ["game", "trace", "end"].forEach((kind) => source.addEventListener(kind, enqueue(kind)));
-  source.onerror = () => stop("OFFLINE");
+  source.onerror = () => stop(session.mode === "agent" ? "NO AGENT GAMES" : "OFFLINE");
   session = { ...session, source, running: true };
   setStatus("LIVE", "live");
   $("#toggle").textContent = "Pause";
@@ -99,6 +106,15 @@ function showTab(name) {
 }
 
 $("#toggle").addEventListener("click", () => (session.running ? stop() : start()));
+$("#source").addEventListener("click", () => {
+  const wasRunning = session.running;
+  if (wasRunning) stop();
+  const mode = session.mode === "agent" ? "simulator" : "agent";
+  queue = [];
+  session = { ...session, mode, before: null };
+  $("#source").textContent = mode === "agent" ? "Table: agent's games" : "Table: simulator";
+  if (wasRunning) start();
+});
 document.querySelectorAll("[data-tab]").forEach((tab) => tab.addEventListener("click", () => showTab(tab.dataset.tab)));
 document.querySelectorAll("[data-speed]").forEach((button) => {
   button.addEventListener("click", () => {
@@ -120,6 +136,31 @@ async function pollLedger() {
   }
 }
 
+// The agent's live action feed. It runs on its own, so it is not tied to Start/Pause.
+const FEED_RETRY_MS = 10000;
+function connectFeed() {
+  const source = new EventSource("/api/feed");
+  source.addEventListener("status", (event) => {
+    const { connected, run } = JSON.parse(event.data);
+    backstage.setAgentState(connected, run);
+    ask.setAgentState(connected, run);
+    if (!connected) {
+      source.close(); // no agent run attached to this server; look again later
+      setTimeout(connectFeed, FEED_RETRY_MS);
+    }
+  });
+  source.addEventListener("feed", (event) => {
+    const action = JSON.parse(event.data);
+    backstage.pushAction(action);
+    ask.pushAction(action);
+  });
+  source.onerror = () => {
+    backstage.setAgentState(false);
+    ask.setAgentState(false);
+  }; // EventSource reconnects by itself and resumes by loop id
+}
+
 setInterval(pollLedger, LEDGER_POLL_MS);
 pollLedger();
+connectFeed();
 showTab("game");

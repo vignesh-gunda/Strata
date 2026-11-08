@@ -1,6 +1,7 @@
 // Behind the scenes, in plain words: what the AI just watched, and what it
 // has learned so far, split into "seen", "guessing" and "proven".
 
+import { ActionLog } from "./ask.js";
 import { cardArt } from "./cards.js";
 import { Results } from "./results.js";
 import { describeStep } from "./words.js";
@@ -37,6 +38,9 @@ export class Backstage {
     this.stats = el("div", "intro-stats");
     intro.append(this.stats);
 
+    this.actionLog = new ActionLog();
+    const actions = this.actionLog.node;
+
     const feedBox = el("section", "feed-box");
     feedBox.append(el("h3", "", "What it just watched"));
     this.feed = el("ol", "feed");
@@ -58,7 +62,7 @@ export class Backstage {
     const body = el("div", "backstage-body");
     body.append(feedBox, learned);
     this.results = new Results();
-    root.replaceChildren(intro, this.results.node, body);
+    root.replaceChildren(intro, actions, this.results.node, body);
     this.watched = 0;
     this.setLedger({ connected: false, claims: [] });
   }
@@ -70,6 +74,15 @@ export class Backstage {
     row.append(el("span", "feed-step", `#${this.watched}`), mark, el("span", "", describeStep(trace).text));
     this.feed.prepend(row);
     while (this.feed.children.length > MAX_FEED) this.feed.lastChild.remove();
+  }
+
+  // One agent loop. `action` is {loop, sentence, type, trace_ids} from /api/feed. Every line is kept.
+  pushAction(action) {
+    this.actionLog.push(action);
+  }
+
+  setAgentState(connected, run) {
+    this.actionLog.setState(connected, run);
   }
 
   addResult(result) {

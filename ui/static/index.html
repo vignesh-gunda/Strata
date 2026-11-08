@@ -14,9 +14,11 @@
     <nav class="tabs" role="tablist" aria-label="Screens">
       <button type="button" role="tab" data-tab="game" aria-selected="true">The game</button>
       <button type="button" role="tab" data-tab="backstage" aria-selected="false">Behind the scenes</button>
+      <button type="button" role="tab" data-tab="ask" aria-selected="false">Ask the agent</button>
     </nav>
     <div class="controls">
       <span id="status" class="status" data-state="idle">READY</span>
+      <button type="button" id="source" class="ghost" aria-label="Which games the table shows" title="Switch between the built-in simulator and the games the agent is playing">Table: simulator</button>
       <div class="speed" role="group" aria-label="Speed">
         <button type="button" data-speed="slow">Slow</button>
         <button type="button" data-speed="normal" aria-pressed="true">Normal</button>
@@ -29,6 +31,7 @@
   <main>
     <section id="arena" data-view="game" class="view game-view" aria-label="The game"></section>
     <section id="backstage" data-view="backstage" class="view backstage-view" aria-label="Behind the scenes" hidden></section>
+    <section id="ask" data-view="ask" class="view ask-view" aria-label="Ask the agent" hidden></section>
   </main>
 
   <footer class="foot">
